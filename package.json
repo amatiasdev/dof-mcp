@@ -1,7 +1,8 @@
 {
   "name": "dof-mcp",
   "version": "0.0.1",
-  "description": "Typed TypeScript client for Mexico's Diario Oficial de la Federación (SIDOF) API, with an MCP server on the roadmap.",
+  "mcpName": "io.github.amatiasdev/dof-mcp",
+  "description": "Typed TypeScript client and MCP server for Mexico's Diario Oficial de la Federación (SIDOF API).",
   "type": "module",
   "license": "MIT",
   "author": "Aldo Matias <contacto@aldomatias.com>",
@@ -21,6 +22,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "dof-mcp": "./dist/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -37,10 +41,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"

@@ -1,16 +1,32 @@
+import type { z } from "zod";
+import { htmlToText } from "./html.js";
 import {
   type Edition,
+  INDICATORS,
+  type Indicator,
+  type IndicatorKey,
   type Note,
+  type NoteDetail,
   type RawDailyResponse,
+  type RawIndicator,
   type RawNote,
+  type RawNoteDetailResponse,
   rawDailyResponseSchema,
+  rawEnvelopeSchema,
+  rawIndicatorsResponseSchema,
+  rawNoteDetailResponseSchema,
 } from "./schema.js";
 
 export const DEFAULT_BASE_URL = "https://sidof.segob.gob.mx/dof/sidof";
 
+/** Public note page on dof.gob.mx. Only for humans: robots.txt disallows fetching it. */
+const OFFICIAL_NOTE_URL = "https://dof.gob.mx/nota_detalle.php";
+
 // SIDOF answers 406 to a bare "application/json" (it serves "application/json;charset=UTF-8"),
 // so the header has to allow a fallback.
 const ACCEPT_HEADER = "application/json, */*;q=0.8";
+
+const EDITION_CODES: Record<string, Edition> = { MAT: "matutina", VES: "vespertina" };
 
 export interface DofClientOptions {
   baseUrl?: string;
@@ -49,6 +65,11 @@ function toIsoDate(sidofDate: string): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Builds the human-facing dof.gob.mx link for a note. */
+export function officialNoteUrl(id: number, sidofDate: string): string {
+  return `${OFFICIAL_NOTE_URL}?codigo=${id}&fecha=${sidofDate.replaceAll("-", "/")}`;
+}
+
 function normalize(raw: RawNote, edition: Edition): Note | undefined {
   if (!raw.titulo) return undefined;
   return {
@@ -62,6 +83,7 @@ function normalize(raw: RawNote, edition: Edition): Note | undefined {
     ...(raw.codOrgaDos ? { organization: raw.codOrgaDos } : {}),
     hasPdf: raw.existePdf === "S",
     hasHtml: raw.existeHtml === "S",
+    officialUrl: officialNoteUrl(raw.codNota, raw.fecha),
   };
 }
 
@@ -75,6 +97,55 @@ export function normalizeDaily(response: RawDailyResponse): Note[] {
   return editions.flatMap(([edition, notes]) =>
     notes.map((n) => normalize(n, edition)).filter((n): n is Note => n !== undefined),
   );
+}
+
+/** Converts a note-detail response into a {@link NoteDetail} with plain-text content. */
+export function normalizeNoteDetail(response: RawNoteDetailResponse): NoteDetail {
+  const raw = response.Nota;
+  const edition = raw.codEdicion ? EDITION_CODES[raw.codEdicion] : undefined;
+  return {
+    id: raw.codNota,
+    title: raw.titulo.trim(),
+    date: toIsoDate(raw.fecha),
+    ...(edition ? { edition } : {}),
+    section: raw.codSeccion,
+    page: raw.pagina,
+    branch: raw.codOrgaUno,
+    organizations: [raw.codOrgaDos, raw.codOrgaTres, raw.codOrgaCuatro].filter(
+      (o): o is string => o !== undefined,
+    ),
+    hasPdf: raw.existePdf === "S",
+    hasDoc: raw.existeDoc === "S",
+    text: raw.cadenaContenido ? htmlToText(raw.cadenaContenido) : "",
+    contentTooLarge: response.tamanioExcesivo ?? false,
+    officialUrl: officialNoteUrl(raw.codNota, raw.fecha),
+  };
+}
+
+const INDICATORS_BY_CODE = new Map<number, { key: IndicatorKey; name: string; unit: string }>(
+  Object.entries(INDICATORS).map(([key, info]) => [
+    info.code,
+    { key: key as IndicatorKey, name: info.name, unit: info.unit },
+  ]),
+);
+
+/** Converts a raw indicator, parsing its decimal string value. */
+export function normalizeIndicator(raw: RawIndicator): Indicator {
+  // Number("") is 0, so check the format instead of trusting Number() alone.
+  const digits = raw.valor.trim().replace(/%$/, "");
+  const value = Number(digits);
+  if (!/^-?\d+(\.\d+)?$/.test(digits) || !Number.isFinite(value)) {
+    throw new DofApiError(`Unexpected indicator value "${raw.valor}" (code ${raw.codIndicador})`);
+  }
+  const known = INDICATORS_BY_CODE.get(raw.codTipoIndicador);
+  return {
+    code: raw.codTipoIndicador,
+    ...(known
+      ? { key: known.key, name: known.name, unit: known.unit }
+      : { name: `Indicador ${raw.codTipoIndicador}` }),
+    date: toIsoDate(raw.fecha),
+    value,
+  };
 }
 
 export class DofClient {
@@ -97,17 +168,52 @@ export class DofClient {
   }
 
   /** Returns the validated raw payload for a given day. */
-  async getDailyRaw(date: Date | string): Promise<RawDailyResponse> {
-    const url = `${this.baseUrl}/notas/${toSidofDate(date)}`;
-    const body = await this.requestJson(url);
-    const parsed = rawDailyResponseSchema.safeParse(body);
+  getDailyRaw(date: Date | string): Promise<RawDailyResponse> {
+    return this.request(`/notas/${toSidofDate(date)}`, rawDailyResponseSchema);
+  }
+
+  /** Returns one publication with its full content as plain text. */
+  async getNote(id: number): Promise<NoteDetail> {
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw new RangeError(`Expected a positive integer note id, got ${id}`);
+    }
+    const raw = await this.request(`/notas/nota/${id}`, rawNoteDetailResponseSchema);
+    return normalizeNoteDetail(raw);
+  }
+
+  /** Returns the indicators published for a day, or the latest ones when no date is given. */
+  async getIndicators(date?: Date | string): Promise<Indicator[]> {
+    const path = date === undefined ? "/indicadores/" : `/indicadores/${toSidofDate(date)}`;
+    const raw = await this.request(path, rawIndicatorsResponseSchema);
+    return raw.ListaIndicadores.map(normalizeIndicator);
+  }
+
+  /** Returns the daily values of one indicator between two dates, inclusive. */
+  async getIndicatorSeries(
+    indicator: IndicatorKey,
+    from: Date | string,
+    to: Date | string,
+  ): Promise<Indicator[]> {
+    const { code } = INDICATORS[indicator];
+    const path = `/indicadores/${code}/${toSidofDate(from)}/${toSidofDate(to)}`;
+    const raw = await this.request(path, rawIndicatorsResponseSchema);
+    return raw.ListaIndicadores.map(normalizeIndicator);
+  }
+
+  private async request<S extends z.ZodType>(path: string, schema: S): Promise<z.output<S>> {
+    const body = await this.requestJson(`${this.baseUrl}${path}`);
+    const envelope = rawEnvelopeSchema.safeParse(body);
+    if (!envelope.success) {
+      throw new DofApiError(`Unexpected SIDOF response shape: ${envelope.error.message}`);
+    }
+    if (envelope.data.messageCode !== 200) {
+      throw new DofApiError(
+        `SIDOF returned messageCode ${envelope.data.messageCode} (${envelope.data.response})`,
+      );
+    }
+    const parsed = schema.safeParse(body);
     if (!parsed.success) {
       throw new DofApiError(`Unexpected SIDOF response shape: ${parsed.error.message}`);
-    }
-    if (parsed.data.messageCode !== 200) {
-      throw new DofApiError(
-        `SIDOF returned messageCode ${parsed.data.messageCode} (${parsed.data.response})`,
-      );
     }
     return parsed.data;
   }
