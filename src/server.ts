@@ -56,6 +56,14 @@ async function guarded(run: () => Promise<CallToolResult>): Promise<CallToolResu
 
 const isoDate = z.iso.date().describe("Date as YYYY-MM-DD");
 
+const provenanceSchema = z
+  .object({
+    sourceUrl: z.string(),
+    fetchedAt: z.string(),
+    sha256: z.string(),
+  })
+  .describe("SIDOF URL the data came from, fetch time (UTC) and SHA-256 of the raw response");
+
 const noteSummarySchema = z.object({
   id: z.number().int(),
   title: z.string(),
@@ -73,6 +81,7 @@ const dailySummaryOutput = z.object({
   notes: z.array(noteSummarySchema),
   truncated: z.boolean(),
   source: z.string(),
+  provenance: provenanceSchema,
 });
 
 const noteOutput = z.object({
@@ -93,6 +102,7 @@ const noteOutput = z.object({
   totalChars: z.number().int(),
   nextOffset: z.number().int().optional(),
   source: z.string(),
+  provenance: provenanceSchema,
 });
 
 const indicatorKeys = Object.keys(INDICATORS) as [IndicatorKey, ...IndicatorKey[]];
@@ -109,6 +119,7 @@ const indicatorsOutput = z.object({
     }),
   ),
   source: z.string(),
+  provenance: provenanceSchema,
 });
 
 /** Builds an MCP server exposing the DOF tools. One instance per connection or request. */
@@ -156,7 +167,8 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
       guarded(async () => {
         const day = date ?? todayInMexico();
         const needle = organization?.toLocaleLowerCase("es-MX");
-        const notes = (await client.getNotes(day)).filter(
+        const { data, source: provenance } = await client.getNotesWithSource(day);
+        const notes = data.filter(
           (n) =>
             (!edition || n.edition === edition) &&
             (!needle || n.organization?.toLocaleLowerCase("es-MX").includes(needle)),
@@ -187,6 +199,7 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
           })),
           truncated: notes.length > limit,
           source: SOURCE_NOTICE,
+          provenance,
         });
       }),
   );
@@ -214,7 +227,7 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
     },
     ({ id, offset, maxChars }) =>
       guarded(async () => {
-        const note = await client.getNote(id);
+        const { data: note, source: provenance } = await client.getNoteWithSource(id);
         if (offset > note.text.length) {
           return fail(`offset ${offset} is past the end of the text (${note.text.length} chars)`);
         }
@@ -226,6 +239,7 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
           totalChars: note.text.length,
           ...(end < note.text.length ? { nextOffset: end } : {}),
           source: SOURCE_NOTICE,
+          provenance,
         });
       }),
   );
@@ -261,11 +275,11 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
           if (span >= MAX_SERIES_DAYS) {
             return fail(`The range is too long; use at most ${MAX_SERIES_DAYS} days.`);
           }
-          const indicators = await client.getIndicatorSeries(indicator, from, to);
-          return ok({ indicators, source: SOURCE_NOTICE });
+          const series = await client.getIndicatorSeriesWithSource(indicator, from, to);
+          return ok({ indicators: series.data, source: SOURCE_NOTICE, provenance: series.source });
         }
-        const indicators = await client.getIndicators(date);
-        return ok({ indicators, source: SOURCE_NOTICE });
+        const day = await client.getIndicatorsWithSource(date);
+        return ok({ indicators: day.data, source: SOURCE_NOTICE, provenance: day.source });
       }),
   );
 

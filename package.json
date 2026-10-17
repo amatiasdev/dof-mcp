@@ -6,19 +6,29 @@
   "type": "module",
   "license": "MIT",
   "author": "Aldo Matias <contacto@aldomatias.com>",
+  "homepage": "https://github.com/amatiasdev/dof-mcp#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/amatiasdev/dof-mcp.git"
   },
+  "bugs": {
+    "url": "https://github.com/amatiasdev/dof-mcp/issues"
+  },
   "keywords": [
     "dof",
     "diario-oficial",
+    "diario-oficial-de-la-federacion",
+    "sidof",
     "mexico",
     "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "banxico",
+    "tipo-de-cambio",
     "typescript"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -29,7 +39,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
@@ -38,7 +49,11 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "prepack": "npm run build",
+    "changeset": "changeset",
+    "version-packages": "changeset version && node scripts/sync-version.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "^2.1.1",
@@ -47,6 +62,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
     "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",

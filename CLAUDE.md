@@ -11,18 +11,20 @@ npm run lint       # biome check .
 npm run typecheck  # tsc --noEmit (TypeScript 7)
 npm test           # vitest run
 npm run build      # tsc -p tsconfig.build.json -> dist/
+npm run test:live  # contract tests against the live SIDOF API (not part of npm test)
 ```
 
-CI (`.github/workflows/ci.yml`) runs all four on every push and PR. Keep it green.
+CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and PR. Keep it green. Other workflows: `contract.yml` (nightly live test, opens an issue on failure), `release.yml` (Changesets + npm trusted publishing + MCP Registry, see RELEASING.md), `codeql.yml`, `scorecard.yml`. Actions are pinned by commit SHA.
 
 ## Layout
 
 - `src/schema.ts`: Zod schemas for raw SIDOF payloads, normalized types, `INDICATORS` code table
-- `src/client.ts`: `DofClient` (`getNotes`, `getNote`, `getIndicators`, `getIndicatorSeries`; timeout, retries on network/5xx only), normalizers, `toSidofDate`, `officialNoteUrl`
+- `src/client.ts`: `DofClient` (`getNotes`, `getNote`, `getIndicators`, `getIndicatorSeries`, each with a `*WithSource` variant returning provenance; no redirects, size cap, retries with jitter on network/429/5xx, TTL cache, concurrency limit), normalizers, `toSidofDate`, `officialNoteUrl`
 - `src/html.ts`: `htmlToText` for note content
 - `src/server.ts`: `createDofServer` (MCP tools); `src/http.ts`: `createDofHttpHandler` (stateless Streamable HTTP, Host/Origin checks, `/healthz`); `src/bin.ts`: CLI (stdio default, `--http`)
 - `src/version.ts`: version reported to MCP clients; a test keeps it equal to package.json
 - `src/index.ts`: public exports
+- `scripts/sync-version.mjs`: copies the package.json version into `src/version.ts`, `server.json` and the lockfile (run by `npm run version-packages`)
 - `test/fixtures/`: real recorded SIDOF responses; tests run against these, not hand-written mocks. `test/server.test.ts` drives the server with the official MCP client
 
 ## SIDOF API facts (verified 2026-10-17)
@@ -57,12 +59,14 @@ CI (`.github/workflows/ci.yml`) runs all four on every push and PR. Keep it gree
 - Strict TS (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), ESM with `.js` import suffixes, 2-space indent, 100-char lines (biome)
 - Validate at the boundary with Zod; fail loudly on unexpected shapes
 - Every new endpoint gets a recorded fixture and tests for parsing, normalization and error paths
-- Keep live-API calls out of the default test run
+- Keep live-API calls out of the default test run; they go in `test/live/`
+- User-facing changes need a changeset (`npx changeset`)
+- Node.js 22+ (Node 20 is EOL)
 
 ## Roadmap (scope: v0.1)
 
-- **F1** (~20 h): client methods for note detail, issues and indicators; MCP server (stdio + Streamable HTTP) with read-only tools `dof_daily_summary`, `dof_get_note`, `dof_get_indicators`
-- **F2** (~12 h): security level 1 (fixed host allowlist, `redirect: "error"`, response size cap, real-date validation, backoff with jitter and `Retry-After`, cache, provenance `source_url`/`fetched_at`/`sha256`; CI actions pinned by SHA, `permissions`, Dependabot, SECURITY.md), then v0.1 on npm (changesets, trusted publishing with provenance) and in the MCP Registry
-- **F3** (optional, after v0.1): hosted endpoint on the owner's personal AWS account (Lambda + EventBridge for nightly ingest + DynamoDB/S3), local search index for `dof_search_notes`, nightly contract test against the live API
+- **F1** (done): client methods for note detail and indicators; MCP server (stdio + Streamable HTTP) with read-only tools `dof_daily_summary`, `dof_get_note`, `dof_get_indicators`
+- **F2** (done in code): hardened client and provenance, pinned CI with CodeQL and Scorecard, Dependabot, SECURITY.md, nightly contract test, Changesets release pipeline with npm trusted publishing and MCP Registry publish. Still needs the owner's one-time steps in RELEASING.md (first manual npm publish, trusted publisher, `release` environment)
+- **F3** (optional, after v0.1): hosted endpoint on the owner's personal AWS account (Lambda + EventBridge for nightly ingest + DynamoDB/S3) and a local search index for `dof_search_notes`
 
 Out of scope: hosted paid service, monitoring or alerting products, RAG/embeddings, full historical backfill.

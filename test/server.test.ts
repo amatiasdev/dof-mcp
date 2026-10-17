@@ -97,6 +97,10 @@ describe("dof_daily_summary", () => {
       /^https:\/\/dof\.gob\.mx\/nota_detalle\.php\?codigo=\d+&fecha=16\/10\/2026$/,
     );
     expect(JSON.parse(result.content[0]?.text ?? "")).toEqual(out);
+    expect(result.structuredContent?.provenance).toMatchObject({
+      sourceUrl: "https://sidof.segob.gob.mx/dof/sidof/notas/16-10-2026",
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
   });
 
   it("filters by organization and truncates to the limit", async () => {

@@ -1,0 +1,30 @@
+# Security policy
+
+## Supported versions
+
+Only the latest minor release on npm receives fixes.
+
+## Reporting a vulnerability
+
+Please report vulnerabilities privately through GitHub: **Security → Report a vulnerability** on
+https://github.com/amatiasdev/dof-mcp. Do not open a public issue.
+
+You can expect an acknowledgement within 7 days. Fixes are released as a patch version with a
+GitHub security advisory.
+
+## Security model
+
+- **Read-only.** Every tool only reads public data from the SIDOF API. There are no write tools,
+  no credentials and no user data.
+- **Fixed upstream.** Requests go only to the configured SIDOF base URL; tool inputs never choose
+  the host. Redirects are rejected, responses are size-capped and validated with Zod.
+- **Untrusted content.** Publication text is government data returned as tool output. MCP clients
+  should treat it as data, never as instructions.
+- **HTTP transport.** `--http` binds to `127.0.0.1` and validates `Host` and `Origin`. It has no
+  authentication or rate limiting; if you expose it beyond localhost, put it behind a reverse
+  proxy that adds them.
+- **Provenance, not authenticity.** Each result carries the SIDOF URL, fetch time and a SHA-256
+  of the raw response. That proves what SIDOF returned and when, not that it matches the official
+  publication. The official edition is the signed PDF on dof.gob.mx.
+- **Supply chain.** Releases are published from GitHub Actions with npm trusted publishing and
+  provenance; workflow actions are pinned by commit SHA.

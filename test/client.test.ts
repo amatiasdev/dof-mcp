@@ -57,7 +57,10 @@ describe("DofClient", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://sidof.segob.gob.mx/dof/sidof/notas/16-10-2026",
-      expect.objectContaining({ headers: { Accept: "application/json, */*;q=0.8" } }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: "application/json, */*;q=0.8" }),
+        redirect: "error",
+      }),
     );
     expect(notes.length).toBeGreaterThan(0);
   });
@@ -67,7 +70,7 @@ describe("DofClient", () => {
       .fn()
       .mockResolvedValueOnce(jsonResponse({}, 503))
       .mockResolvedValueOnce(jsonResponse(fixture));
-    const client = new DofClient({ fetch: fetchMock, retries: 1 });
+    const client = new DofClient({ fetch: fetchMock, retries: 1, retryBaseDelayMs: 0 });
 
     await expect(client.getNotes("2026-10-16")).resolves.not.toHaveLength(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
