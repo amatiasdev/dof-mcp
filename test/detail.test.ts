@@ -26,6 +26,10 @@ describe("htmlToText", () => {
     expect(htmlToText(html)).toBe("Primero y segundo\n\nA | B\n\nárbol & ñ");
   });
 
+  it("keeps a stray less-than sign in the text", () => {
+    expect(htmlToText("<p>si x < 5 y z > 3</p>")).toBe("si x < 5 y z > 3");
+  });
+
   it("leaves unknown entities untouched", () => {
     expect(htmlToText("<p>&bogus; &#xZZ;</p>")).toBe("&bogus; &#xZZ;");
   });

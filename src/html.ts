@@ -31,7 +31,8 @@ export function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/t[dh]>/gi, " | ")
     .replace(/<\/(div|p|tr|table|h[1-6]|li)>/gi, "\n")
-    .replace(/<[^>]+>/g, "");
+    // Only strip things that look like tags, so a stray "<" in legal text survives.
+    .replace(/<\/?[a-z!][^>]*>/gi, "");
   return decodeEntities(text)
     .split("\n")
     .map((line) =>

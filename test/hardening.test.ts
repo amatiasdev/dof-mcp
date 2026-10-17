@@ -211,4 +211,27 @@ describe("DofClient concurrency", () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(peak).toBe(2);
   });
+
+  it("does not hold a slot while waiting to retry", async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      calls++;
+      return url.endsWith("15-10-2026") && calls === 1
+        ? textResponse("{}", 503, { "Retry-After": "1" })
+        : ok();
+    });
+    const client = new DofClient({
+      fetch: fetchMock as unknown as typeof fetch,
+      maxConcurrency: 1,
+      retryBaseDelayMs: 0,
+    });
+
+    const retrying = client.getDailyRaw("2026-10-15");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const started = Date.now();
+    await client.getDailyRaw("2026-10-16");
+
+    expect(Date.now() - started).toBeLessThan(500);
+    await retrying;
+  });
 });

@@ -79,7 +79,10 @@ export interface Sourced<T> {
   source: Provenance;
 }
 
-/** Formats a date as the DD-MM-YYYY path segment SIDOF expects. Accepts a Date or YYYY-MM-DD. */
+/**
+ * Formats a date as the DD-MM-YYYY path segment SIDOF expects. Accepts YYYY-MM-DD (preferred:
+ * unambiguous) or a Date, which is read in the local time zone of the running process.
+ */
 export function toSidofDate(date: Date | string): string {
   if (typeof date === "string") {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -258,14 +261,17 @@ class Limiter {
 
   async run<T>(task: () => Promise<T>): Promise<T> {
     if (this.active >= this.max) {
+      // The finishing task hands its slot over, so `active` already counts this one.
       await new Promise<void>((resolve) => this.queue.push(resolve));
+    } else {
+      this.active++;
     }
-    this.active++;
     try {
       return await task();
     } finally {
-      this.active--;
-      this.queue.shift()?.();
+      const next = this.queue.shift();
+      if (next) next();
+      else this.active--;
     }
   }
 }
@@ -402,7 +408,7 @@ export class DofClient {
     url: string,
     schema: S,
   ): Promise<Sourced<z.output<S>>> {
-    const { body, source } = await this.limiter.run(() => this.fetchWithRetries(url));
+    const { body, source } = await this.fetchWithRetries(url);
     const envelope = rawEnvelopeSchema.safeParse(body);
     if (!envelope.success) {
       throw new DofApiError(`Unexpected SIDOF response shape: ${envelope.error.message}`);
@@ -424,7 +430,8 @@ export class DofClient {
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       let retryAfterMs: number | undefined;
       try {
-        return await this.fetchOnce(url);
+        // Hold a concurrency slot per attempt only, so backoff waits don't block other requests.
+        return await this.limiter.run(() => this.fetchOnce(url));
       } catch (error) {
         const retryable =
           !(error instanceof DofApiError) ||
