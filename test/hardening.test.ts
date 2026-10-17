@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { DofApiError, DofClient, toSidofDate, VERSION } from "../src/index.js";
+import { DofApiError, DofClient, DofQueueFullError, toSidofDate, VERSION } from "../src/index.js";
 
 const fixtureText = readFileSync(
   new URL("./fixtures/notas-16-10-2026.json", import.meta.url),
@@ -178,6 +178,17 @@ describe("DofClient cache", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("does not cache responses over maxCacheableBytes", async () => {
+    const fetchMock = fetchReturning(ok);
+    const client = new DofClient({ fetch: fetchMock, maxCacheableBytes: 1000 });
+
+    const { source } = await client.getNotesWithSource("2026-10-16");
+    await client.getNotes("2026-10-16");
+
+    expect(source.bytes).toBe(Buffer.byteLength(fixtureText));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("can be disabled", async () => {
     const fetchMock = fetchReturning(ok);
     const client = new DofClient({ fetch: fetchMock, cacheTtlMs: 0 });
@@ -210,6 +221,32 @@ describe("DofClient concurrency", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(peak).toBe(2);
+  });
+
+  it("fails fast, without retrying, when the queue is full", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async () => {
+      await gate;
+      return ok();
+    });
+    const client = new DofClient({
+      fetch: fetchMock,
+      maxConcurrency: 1,
+      maxQueue: 1,
+      cacheTtlMs: 0,
+      retryBaseDelayMs: 0,
+    });
+
+    const running = client.getDailyRaw("2026-10-14");
+    const queued = client.getDailyRaw("2026-10-15");
+    await expect(client.getDailyRaw("2026-10-16")).rejects.toBeInstanceOf(DofQueueFullError);
+
+    release();
+    await Promise.all([running, queued]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not hold a slot while waiting to retry", async () => {

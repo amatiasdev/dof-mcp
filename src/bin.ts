@@ -41,6 +41,13 @@ if (values.help) {
     process.stderr.write(`Invalid --port "${values.port}"\n`);
     process.exit(1);
   }
+  if (!["127.0.0.1", "::1", "localhost"].includes(values.host)) {
+    process.stderr.write(
+      `Warning: binding to ${values.host}. Host and Origin checks guard against DNS rebinding, ` +
+        "not unauthorized access; this server has no authentication or rate limiting. Put it " +
+        "behind a reverse proxy that adds them.\n",
+    );
+  }
   const handler = createDofHttpHandler({
     allowedHosts: [...localhostAllowedHostnames(), ...values["allowed-host"]],
   });

@@ -69,7 +69,7 @@ const note = await dof.getNote(5801457); // full text as plain text
 const fix = await dof.getIndicatorSeries("fix", "2026-10-01", "2026-10-16");
 
 const { data, source } = await dof.getNotesWithSource("2026-10-16");
-// source: { sourceUrl, fetchedAt, sha256 }
+// source: { sourceUrl, fetchedAt, sha256, bytes }
 ```
 
 Options (all optional):
@@ -81,7 +81,9 @@ Options (all optional):
 | `maxResponseBytes` | 10 MiB | Larger responses are rejected unparsed |
 | `cacheTtlMs` | 10 min | In-memory cache; identical concurrent requests share one fetch. `0` disables |
 | `cacheMaxEntries` | `256` | LRU bound |
+| `maxCacheableBytes` | 512 KiB | Larger responses are returned but not cached |
 | `maxConcurrency` | `4` | Requests in flight to SIDOF at once |
+| `maxQueue` | `64` | Requests waiting for a slot; beyond it they fail fast with `DofQueueFullError` |
 
 ## Design notes
 

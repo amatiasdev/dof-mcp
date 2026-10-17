@@ -30,6 +30,13 @@ const sidofFetch: typeof fetch = async (input) => {
     : Response.json(body, { headers: { "Content-Type": "application/json;charset=UTF-8" } });
 };
 
+/** A Request carrying the Host header node:http would pass through (fetch does not add it). */
+function hostRequest(url: string | URL, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("host", new URL(url).host);
+  return new Request(url, { ...init, headers });
+}
+
 let handler: DofHttpHandler | undefined;
 let client: Client | undefined;
 
@@ -39,7 +46,7 @@ async function connect(): Promise<Client> {
   client = new Client({ name: "dof-mcp-test", version: "1.0.0" });
   await client.connect(
     new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      fetch: (url, init) => served.fetch(new Request(url, init)),
+      fetch: (url, init) => served.fetch(hostRequest(url, init)),
     }),
   );
   return client;
@@ -197,7 +204,7 @@ describe("dof_get_indicators", () => {
 describe("HTTP handler", () => {
   it("answers the health probe", async () => {
     handler = createDofHttpHandler();
-    const res = await handler.fetch(new Request("http://localhost/healthz"));
+    const res = await handler.fetch(hostRequest("http://localhost/healthz"));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "ok" });
@@ -205,7 +212,7 @@ describe("HTTP handler", () => {
 
   it("returns 404 outside the MCP path", async () => {
     handler = createDofHttpHandler();
-    const res = await handler.fetch(new Request("http://localhost/other"));
+    const res = await handler.fetch(hostRequest("http://localhost/other"));
 
     expect(res.status).toBe(404);
   });
@@ -213,7 +220,7 @@ describe("HTTP handler", () => {
   it("rejects foreign browser origins", async () => {
     handler = createDofHttpHandler();
     const res = await handler.fetch(
-      new Request("http://localhost/mcp", {
+      hostRequest("http://localhost/mcp", {
         method: "POST",
         headers: { Origin: "https://evil.example", "Content-Type": "application/json" },
         body: "{}",
@@ -225,7 +232,14 @@ describe("HTTP handler", () => {
 
   it("rejects unexpected Host headers", async () => {
     handler = createDofHttpHandler();
-    const res = await handler.fetch(new Request("http://attacker.example/healthz"));
+    const res = await handler.fetch(hostRequest("http://attacker.example/healthz"));
+
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects requests without a Host header", async () => {
+    handler = createDofHttpHandler();
+    const res = await handler.fetch(new Request("http://localhost/healthz"));
 
     expect(res.status).toBe(403);
   });

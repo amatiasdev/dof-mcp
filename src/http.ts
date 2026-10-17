@@ -39,8 +39,8 @@ export function createDofHttpHandler(options: DofHttpHandlerOptions = {}): DofHt
   return {
     fetch: async (request) => {
       const url = new URL(request.url);
-      const host = request.headers.get("host") ?? url.host;
-      const hostResult = validateHostHeader(host, allowedHosts);
+      // Fails closed: a request without a Host header is rejected.
+      const hostResult = validateHostHeader(request.headers.get("host"), allowedHosts);
       if (!hostResult.ok) {
         return Response.json(
           { jsonrpc: "2.0", error: { code: -32000, message: hostResult.message }, id: null },

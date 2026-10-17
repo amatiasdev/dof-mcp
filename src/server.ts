@@ -61,6 +61,7 @@ const provenanceSchema = z
     sourceUrl: z.string(),
     fetchedAt: z.string(),
     sha256: z.string(),
+    bytes: z.number().int(),
   })
   .describe("SIDOF URL the data came from, fetch time (UTC) and SHA-256 of the raw response");
 

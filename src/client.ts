@@ -49,8 +49,12 @@ export interface DofClientOptions {
   cacheTtlMs?: number;
   /** Maximum cached responses; the least recently used are evicted first. */
   cacheMaxEntries?: number;
+  /** Responses larger than this are returned but not cached, to bound memory use. */
+  maxCacheableBytes?: number;
   /** Maximum requests in flight to SIDOF at once. */
   maxConcurrency?: number;
+  /** Maximum requests waiting for a slot; beyond it requests fail fast. */
+  maxQueue?: number;
   userAgent?: string;
   fetch?: typeof globalThis.fetch;
 }
@@ -72,6 +76,8 @@ export interface Provenance {
   fetchedAt: string;
   /** Hex SHA-256 of the raw response body. */
   sha256: string;
+  /** Size of the raw response body in bytes. */
+  bytes: number;
 }
 
 export interface Sourced<T> {
@@ -252,15 +258,27 @@ async function readLimited(res: Response, maxBytes: number): Promise<Uint8Array<
   return bytes;
 }
 
-/** Caps how many tasks run at once; the rest wait in FIFO order. */
+/** Raised when too many requests are already waiting; not retried. */
+export class DofQueueFullError extends DofApiError {
+  constructor(maxQueue: number) {
+    super(`Too many pending SIDOF requests (more than ${maxQueue} waiting). Try again later.`);
+    this.name = "DofQueueFullError";
+  }
+}
+
+/** Caps how many tasks run at once; the rest wait in FIFO order, up to `maxQueue`. */
 class Limiter {
   private active = 0;
   private readonly queue: (() => void)[] = [];
 
-  constructor(private readonly max: number) {}
+  constructor(
+    private readonly max: number,
+    private readonly maxQueue: number,
+  ) {}
 
   async run<T>(task: () => Promise<T>): Promise<T> {
     if (this.active >= this.max) {
+      if (this.queue.length >= this.maxQueue) throw new DofQueueFullError(this.maxQueue);
       // The finishing task hands its slot over, so `active` already counts this one.
       await new Promise<void>((resolve) => this.queue.push(resolve));
     } else {
@@ -289,6 +307,7 @@ export class DofClient {
   private readonly maxResponseBytes: number;
   private readonly cacheTtlMs: number;
   private readonly cacheMaxEntries: number;
+  private readonly maxCacheableBytes: number;
   private readonly userAgent: string;
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly limiter: Limiter;
@@ -306,9 +325,13 @@ export class DofClient {
     this.maxResponseBytes = options.maxResponseBytes ?? 10 * 1024 * 1024;
     this.cacheTtlMs = options.cacheTtlMs ?? 10 * 60_000;
     this.cacheMaxEntries = options.cacheMaxEntries ?? 256;
+    this.maxCacheableBytes = options.maxCacheableBytes ?? 512 * 1024;
     this.userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
-    this.limiter = new Limiter(Math.max(1, options.maxConcurrency ?? 4));
+    this.limiter = new Limiter(
+      Math.max(1, options.maxConcurrency ?? 4),
+      Math.max(0, options.maxQueue ?? 64),
+    );
   }
 
   /** Returns every titled publication in the DOF for a given day. */
@@ -393,9 +416,12 @@ export class DofClient {
 
     const value = this.fetchValidated(url, schema);
     this.cache.set(url, { expires: now + this.cacheTtlMs, value });
-    value.catch(() => {
+    const evict = () => {
       if (this.cache.get(url)?.value === value) this.cache.delete(url);
-    });
+    };
+    value.then((result) => {
+      if (result.source.bytes > this.maxCacheableBytes) evict();
+    }, evict);
     while (this.cache.size > this.cacheMaxEntries) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;
@@ -433,11 +459,13 @@ export class DofClient {
         // Hold a concurrency slot per attempt only, so backoff waits don't block other requests.
         return await this.limiter.run(() => this.fetchOnce(url));
       } catch (error) {
+        // Network errors and timeouts are not DofApiErrors; a full queue fails fast.
         const retryable =
-          !(error instanceof DofApiError) ||
-          error.status === undefined ||
-          error.status === 429 ||
-          error.status >= 500;
+          !(error instanceof DofQueueFullError) &&
+          (!(error instanceof DofApiError) ||
+            error.status === undefined ||
+            error.status === 429 ||
+            error.status >= 500);
         if (!retryable) throw error;
         lastError = error;
         if (error instanceof RetryAfterError) retryAfterMs = error.retryAfterMs;
@@ -478,6 +506,7 @@ export class DofClient {
     } catch {
       throw new DofApiError("SIDOF returned a body that is not valid JSON", res.status);
     }
-    return { body, source: { sourceUrl: url, fetchedAt, sha256: await sha256Hex(bytes) } };
+    const sha256 = await sha256Hex(bytes);
+    return { body, source: { sourceUrl: url, fetchedAt, sha256, bytes: bytes.byteLength } };
   }
 }

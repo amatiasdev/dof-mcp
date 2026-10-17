@@ -30,6 +30,23 @@ describe("htmlToText", () => {
     expect(htmlToText("<p>si x < 5 y z > 3</p>")).toBe("si x < 5 y z > 3");
   });
 
+  it("drops an unclosed head to the end and keeps <header> content", () => {
+    expect(htmlToText("<header>Arriba</header><p>Texto</p>")).toBe("ArribaTexto");
+    expect(htmlToText("<p>Antes</p><head><title>sin cierre")).toBe("Antes");
+  });
+
+  it.each([
+    ["unclosed tags", "<a".repeat(200_000)],
+    ["unclosed head blocks", "<head".repeat(80_000)],
+    ["unclosed style blocks", "<style>".repeat(50_000)],
+    ["unterminated entities", "&#1".repeat(100_000)],
+    ["many styles then one head", `${"<style></style>".repeat(50_000)}<head></head>`],
+  ])("stays fast on pathological input (%s)", (_label, html) => {
+    const started = performance.now();
+    htmlToText(html);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it("leaves unknown entities untouched", () => {
     expect(htmlToText("<p>&bogus; &#xZZ;</p>")).toBe("&bogus; &#xZZ;");
   });
