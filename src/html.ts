@@ -1,90 +1,52 @@
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
+import { Parser } from "htmlparser2";
 
-function decodeEntities(text: string): string {
-  return text.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (match, entity: string) => {
-    if (entity[0] === "#") {
-      const hex = entity[1] === "x" || entity[1] === "X";
-      const codePoint = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10);
-      return Number.isFinite(codePoint) && codePoint <= 0x10ffff
-        ? String.fromCodePoint(codePoint)
-        : match;
-    }
-    return NAMED_ENTITIES[entity.toLowerCase()] ?? match;
-  });
-}
+/** Elements whose content is not part of the note text. */
+const SKIPPED = new Set(["head", "title", "style", "script", "noscript", "template"]);
+
+/** Elements that end a line of text. */
+const BLOCKS = new Set(["div", "p", "tr", "table", "h1", "h2", "h3", "h4", "h5", "h6", "li"]);
 
 /**
- * Removes `<name ...>...</name>` blocks for the given element names in one linear scan. A block
- * without its closing tag is dropped to the end of the input, as a browser would treat it.
- */
-function dropElements(html: string, names: string[]): string {
-  const lower = html.toLowerCase();
-  // Next opening position per name, reused until the scan passes it, so the total work stays
-  // linear even when one element repeats many times and another appears once at the end.
-  const next = new Map<string, number>();
-  const findOpen = (name: string, from: number): number => {
-    let at = lower.indexOf(`<${name}`, from);
-    // Skip prefixes such as "<header" when looking for "<head".
-    while (at !== -1 && /[a-z0-9]/.test(lower[at + name.length + 1] ?? "")) {
-      at = lower.indexOf(`<${name}`, at + 1);
-    }
-    return at;
-  };
-  let out = "";
-  let pos = 0;
-  while (pos < html.length) {
-    let start = -1;
-    let name = "";
-    for (const candidate of names) {
-      let at = next.get(candidate);
-      if (at === undefined || (at !== -1 && at < pos)) {
-        at = findOpen(candidate, pos);
-        next.set(candidate, at);
-      }
-      if (at !== -1 && (start === -1 || at < start)) {
-        start = at;
-        name = candidate;
-      }
-    }
-    if (start === -1) break;
-    out += html.slice(pos, start);
-    const close = lower.indexOf(`</${name}`, start);
-    if (close === -1) return out;
-    const end = lower.indexOf(">", close);
-    pos = end === -1 ? html.length : end + 1;
-  }
-  return out + html.slice(pos);
-}
-
-/**
- * Converts the HTML SIDOF serves for a note into readable plain text: drops the head and
- * styles, keeps paragraph and table-row breaks, and separates table cells with " | ".
- * Runs in linear time, so malformed upstream HTML cannot stall the process.
+ * Converts the HTML SIDOF serves for a note into readable plain text: drops the head, styles
+ * and scripts, keeps paragraph and table-row breaks, and separates table cells with " | ".
  *
- * This is not an HTML sanitizer. The result is plain text and can contain "<" and ">" (a stray
- * "<" in the source, or decoded `&lt;`), so escape it before inserting it into HTML.
+ * Uses htmlparser2's streaming tokenizer, which handles malformed markup in linear time, so
+ * broken upstream HTML cannot stall the process.
+ *
+ * The result is plain text, not HTML: it can contain "<" and ">" (for example from a decoded
+ * `&lt;`), so escape it before inserting it into a web page.
  */
 export function htmlToText(html: string): string {
-  const text = dropElements(html, ["head", "style", "script"])
-    .replace(/<!DOCTYPE[^<>]*>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/t[dh]\s*>/gi, " | ")
-    .replace(/<\/(div|p|tr|table|h[1-6]|li)\s*>/gi, "\n")
-    // Only strip things that look like tags, and never across another "<", so a stray "<" in
-    // legal text survives and matching stays linear.
-    .replace(/<\/?[a-z!][^<>]*>/gi, "");
-  return decodeEntities(text)
+  let text = "";
+  let skipDepth = 0;
+  const parser = new Parser(
+    {
+      onopentag(name) {
+        if (SKIPPED.has(name)) skipDepth++;
+        else if (skipDepth === 0 && name === "br") text += "\n";
+      },
+      ontext(data) {
+        if (skipDepth === 0) text += data;
+      },
+      onclosetag(name) {
+        if (SKIPPED.has(name)) {
+          skipDepth = Math.max(0, skipDepth - 1);
+        } else if (skipDepth === 0) {
+          if (name === "td" || name === "th") text += " | ";
+          else if (BLOCKS.has(name)) text += "\n";
+        }
+      },
+    },
+    { decodeEntities: true },
+  );
+  parser.write(html);
+  parser.end();
+
+  return text
     .split("\n")
     .map((line) =>
       line
-        .replace(/[ \t ]+/g, " ")
+        .replace(/[ \t\r ]+/g, " ")
         .replace(/( \| )+$/, "")
         .trim(),
     )

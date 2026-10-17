@@ -20,7 +20,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 
 - `src/schema.ts`: Zod schemas for raw SIDOF payloads, normalized types, `INDICATORS` code table
 - `src/client.ts`: `DofClient` (`getNotes`, `getNote`, `getIndicators`, `getIndicatorSeries`, each with a `*WithSource` variant returning provenance; no redirects, size cap, retries with jitter on network/429/5xx, TTL cache, concurrency limit), normalizers, `toSidofDate`, `officialNoteUrl`
-- `src/html.ts`: `htmlToText` for note content
+- `src/html.ts`: `htmlToText` for note content, built on the htmlparser2 tokenizer (no regex over HTML)
 - `src/server.ts`: `createDofServer` (MCP tools); `src/http.ts`: `createDofHttpHandler` (stateless Streamable HTTP, Host/Origin checks, `/healthz`); `src/bin.ts`: CLI (stdio default, `--http`)
 - `src/version.ts`: version reported to MCP clients; a test keeps it equal to package.json
 - `src/index.ts`: public exports
