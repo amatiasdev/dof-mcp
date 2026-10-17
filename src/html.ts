@@ -6,6 +6,17 @@ const SKIPPED = new Set(["head", "title", "style", "script", "noscript", "templa
 /** Elements that end a line of text. */
 const BLOCKS = new Set(["div", "p", "tr", "table", "h1", "h2", "h3", "h4", "h5", "h6", "li"]);
 
+const CELL_SEPARATOR = " | ";
+
+/** Drops the separators left after a row's last cell. A loop, not a regex: no backtracking. */
+function trimTrailingCellSeparators(line: string): string {
+  let end = line.length;
+  while (end >= CELL_SEPARATOR.length && line.endsWith(CELL_SEPARATOR, end)) {
+    end -= CELL_SEPARATOR.length;
+  }
+  return line.slice(0, end);
+}
+
 /**
  * Converts the HTML SIDOF serves for a note into readable plain text: drops the head, styles
  * and scripts, keeps paragraph and table-row breaks, and separates table cells with " | ".
@@ -32,7 +43,7 @@ export function htmlToText(html: string): string {
         if (SKIPPED.has(name)) {
           skipDepth = Math.max(0, skipDepth - 1);
         } else if (skipDepth === 0) {
-          if (name === "td" || name === "th") text += " | ";
+          if (name === "td" || name === "th") text += CELL_SEPARATOR;
           else if (BLOCKS.has(name)) text += "\n";
         }
       },
@@ -44,12 +55,7 @@ export function htmlToText(html: string): string {
 
   return text
     .split("\n")
-    .map((line) =>
-      line
-        .replace(/[ \t\r ]+/g, " ")
-        .replace(/( \| )+$/, "")
-        .trim(),
-    )
+    .map((line) => trimTrailingCellSeparators(line.replace(/[ \t\r ]+/g, " ")).trim())
     .filter((line, i, lines) => line !== "" || (i > 0 && lines[i - 1] !== ""))
     .join("\n")
     .trim();

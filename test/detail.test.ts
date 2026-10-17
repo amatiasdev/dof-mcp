@@ -45,6 +45,7 @@ describe("htmlToText", () => {
     ["unclosed style blocks", "<style>".repeat(50_000)],
     ["unterminated entities", "&#1".repeat(100_000)],
     ["many styles then one head", `${"<style></style>".repeat(50_000)}<head></head>`],
+    ["many empty cells before text", `<table><tr>${"<td></td>".repeat(100_000)}x</tr></table>`],
   ])("stays fast on pathological input (%s)", (_label, html) => {
     const started = performance.now();
     htmlToText(html);
