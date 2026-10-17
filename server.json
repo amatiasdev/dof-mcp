@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.amatiasdev/dof-mcp",
+  "title": "Diario Oficial de la Federación",
+  "description": "Publications and financial indicators from Mexico's Diario Oficial de la Federación (DOF)",
+  "repository": {
+    "url": "https://github.com/amatiasdev/dof-mcp",
+    "source": "github"
+  },
+  "version": "0.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "dof-mcp",
+      "version": "0.0.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
