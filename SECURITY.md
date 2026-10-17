@@ -19,7 +19,8 @@ GitHub security advisory.
 - **Fixed upstream.** Requests go only to the configured SIDOF base URL; tool inputs never choose
   the host. Redirects are rejected, responses are size-capped and validated with Zod.
 - **Untrusted content.** Publication text is government data returned as tool output. MCP clients
-  should treat it as data, never as instructions.
+  should treat it as data, never as instructions. `htmlToText` and the `text` field are plain
+  text, not sanitized HTML: they can contain `<` and `>`, so escape them before rendering as HTML.
 - **HTTP transport.** `--http` binds to `127.0.0.1` and validates `Host` (failing closed when it
   is missing) and `Origin`. Those checks guard against DNS rebinding and cross-site requests; they
   are not access control. There is no authentication or rate limiting, so if you expose it beyond

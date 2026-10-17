@@ -26,6 +26,10 @@ describe("htmlToText", () => {
     expect(htmlToText(html)).toBe("Primero y segundo\n\nA | B\n\nárbol & ñ");
   });
 
+  it("returns plain text, not sanitized HTML: escaped markup decodes to literal text", () => {
+    expect(htmlToText("<p>&lt;script&gt;</p>")).toBe("<script>");
+  });
+
   it("keeps a stray less-than sign in the text", () => {
     expect(htmlToText("<p>si x < 5 y z > 3</p>")).toBe("si x < 5 y z > 3");
   });

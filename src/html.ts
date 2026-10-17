@@ -67,6 +67,9 @@ function dropElements(html: string, names: string[]): string {
  * Converts the HTML SIDOF serves for a note into readable plain text: drops the head and
  * styles, keeps paragraph and table-row breaks, and separates table cells with " | ".
  * Runs in linear time, so malformed upstream HTML cannot stall the process.
+ *
+ * This is not an HTML sanitizer. The result is plain text and can contain "<" and ">" (a stray
+ * "<" in the source, or decoded `&lt;`), so escape it before inserting it into HTML.
  */
 export function htmlToText(html: string): string {
   const text = dropElements(html, ["head", "style", "script"])
