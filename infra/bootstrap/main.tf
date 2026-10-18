@@ -33,9 +33,15 @@ variable "account_id" {
   }
 }
 
-variable "github_repository" {
-  type    = string
-  default = "amatiasdev/dof-mcp"
+variable "github_oidc_sub_prefix" {
+  description = <<-EOT
+    Prefix of the `sub` claim GitHub puts in this repository's OIDC tokens. The repository uses
+    immutable subjects, which embed the owner and repository IDs, so a deleted and recreated
+    repository with the same name cannot assume the role. Read it with:
+    gh api repos/OWNER/REPO/actions/oidc/customization/sub --jq .sub_claim_prefix
+  EOT
+  type        = string
+  default     = "repo:amatiasdev@61271540/dof-mcp@1423790006"
 }
 
 variable "function_name" {
@@ -102,7 +108,7 @@ data "aws_iam_policy_document" "deploy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:release"]
+      values   = ["${var.github_oidc_sub_prefix}:environment:release"]
     }
   }
 }
