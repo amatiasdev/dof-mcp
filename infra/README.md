@@ -19,11 +19,11 @@ Terraform pins every provider to one account (`allowed_account_ids`, from `accou
 The account ID and the state bucket name stay out of this public repository. Before the first `terraform init`, in each stack:
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars      # infra/bootstrap and infra/app
-cp backend.hcl.example backend.hcl                # infra/app only
+cp terraform.tfvars.example terraform.tfvars
+cp backend.hcl.example backend.hcl
 ```
 
-Fill in the account ID (and, for the app, the budget email). Both files are git-ignored. Initialize the app with `terraform init -backend-config=backend.hcl`.
+Fill in the account ID (and, for the app, the budget email). Both files are git-ignored. Both stacks keep their state in the S3 bucket the bootstrap creates; initialize each with `terraform init -backend-config=backend.hcl`.
 
 ## Prerequisites
 
@@ -33,10 +33,12 @@ Fill in the account ID (and, for the app, the budget email). Both files are git-
 
 ## First deployment
 
-1. **Bootstrap** (state bucket, GitHub OIDC provider, deploy role). Its state stays local in `infra/bootstrap/`, which git ignores:
+1. **Bootstrap** (state bucket, GitHub OIDC provider, deploy role). Its state goes in the bucket it creates, so the very first time comment out the `backend "s3"` block, apply with local state, restore the block and migrate:
    ```bash
    cd infra/bootstrap && terraform init && terraform apply
+   terraform init -migrate-state -backend-config=backend.hcl   # after restoring the backend block
    ```
+   Day to day: `terraform init -backend-config=backend.hcl`.
    Store the `deploy_role_arn` output as the variable `AWS_DEPLOY_ROLE_ARN` of the GitHub environment `release` (Settings → Environments → release → Variables).
 
 2. **Bundle**, from the repository root:
@@ -80,6 +82,13 @@ Releases deploy automatically. To push code by hand, zip `build/lambda/` with fo
 aws lambda update-function-code --function-name dof-mcp --zip-file fileb://build/lambda.zip \
   --profile personal --region mx-central-1
 ```
+
+## Monitoring
+
+- **Request log:** one JSON line per request in `/aws/lambda/dof-mcp` (7-day retention): method, path, status, duration, JSON-RPC method, tool, the client's self-reported name and version, and `toolError` when a tool failed. No IPs or arguments.
+- **Alarms** (email through SNS topic `dof-mcp-alerts`; confirm the subscription email once): Lambda errors (≥3 in 15 min), throttles (≥10 in 15 min), tool errors (≥10 in 15 min, usually SIDOF failing) and 5xx answers (≥3 in 15 min).
+- **Saved queries** (CloudWatch → Logs Insights → Saved queries): `dof-mcp/distinct-clients-per-week`, the adoption metric and the kill criterion, and `dof-mcp/tool-usage`.
+- **Cost:** budget alerts at $5 and $15 (`budget.tf`). Monitoring itself stays within the CloudWatch and SNS free tiers (4 alarms, 2 metrics, email).
 
 ## Kill switch
 

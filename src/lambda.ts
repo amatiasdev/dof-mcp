@@ -112,17 +112,92 @@ export function createLambdaHandler(options: LambdaHandlerOptions = {}): LambdaH
   return async (event) => {
     const started = Date.now();
     const result = await toResult(await handler.fetch(toRequest(event)));
-    // One line per request, without IPs or arguments.
+    // One line per request: what was called and by which client, never IPs or arguments.
     console.log(
       JSON.stringify({
         method: event.requestContext.http.method,
         path: event.rawPath,
         status: result.statusCode,
         ms: Date.now() - started,
+        ...describeRequest(event),
+        ...describeResponse(result.body),
       }),
     );
     return result;
   };
+}
+
+const CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo";
+
+/** Keeps client-supplied labels short and printable, so they cannot forge log lines. */
+function label(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const clean = value.replace(/[^\w .@/+-]/g, "").slice(0, 64);
+  return clean === "" ? undefined : clean;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+export interface RequestSummary {
+  rpc?: string;
+  tool?: string;
+  client?: string;
+  clientVersion?: string;
+}
+
+/**
+ * Reads the JSON-RPC method, the tool name and the client's self-reported name from a request
+ * body, for usage metrics. The client name comes from `initialize` (2025 clients) or from the
+ * per-request `_meta` (2026-07-28 clients). Tool arguments are never read.
+ */
+export function describeRequest(
+  event: Pick<HttpApiEvent, "body" | "isBase64Encoded">,
+): RequestSummary {
+  if (!event.body) return {};
+  let message: unknown;
+  try {
+    const text = event.isBase64Encoded ? Buffer.from(event.body, "base64").toString() : event.body;
+    message = JSON.parse(text);
+  } catch {
+    return {};
+  }
+  const root = asRecord(Array.isArray(message) ? message[0] : message);
+  const params = asRecord(root?.params);
+  const meta = asRecord(params?._meta);
+  const clientInfo = asRecord(params?.clientInfo) ?? asRecord(meta?.[CLIENT_INFO_META_KEY]);
+  const summary: RequestSummary = {};
+  const rpc = label(root?.method);
+  if (rpc) summary.rpc = rpc;
+  if (rpc === "tools/call") {
+    const tool = label(params?.name);
+    if (tool) summary.tool = tool;
+  }
+  const client = label(clientInfo?.name);
+  if (client) summary.client = client;
+  const clientVersion = label(clientInfo?.version);
+  if (clientVersion) summary.clientVersion = clientVersion;
+  return summary;
+}
+
+/** Flags tool calls that came back as errors, plain JSON or a buffered SSE event. */
+export function describeResponse(body: string): { toolError?: true } {
+  const json = body.startsWith("event:")
+    ? body
+        .split("\n")
+        .find((line) => line.startsWith("data: "))
+        ?.slice("data: ".length)
+    : body;
+  if (!json) return {};
+  try {
+    const result = asRecord(asRecord(JSON.parse(json))?.result);
+    return result?.isError === true ? { toolError: true } : {};
+  } catch {
+    return {};
+  }
 }
 
 let cached: LambdaHandler | undefined;

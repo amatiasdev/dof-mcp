@@ -52,6 +52,8 @@ claude mcp add --transport http dof https://mcp.aldomatias.com/mcp
 
 It serves the same tools and the same release as the npm package. It is a free, best-effort service with no SLA; for heavy use, run the package yourself.
 
+**Privacy.** The endpoint does not store IP addresses, tool arguments or results. For each request it logs the HTTP method and path, status, duration, the JSON-RPC method, the tool name, and the name and version your MCP client reports about itself (for example `claude-ai`). Those logs are kept for 7 days in AWS CloudWatch and are used only to count usage and detect failures. Traffic passes through Cloudflare, which processes IP addresses to apply rate limiting and DDoS protection under [its own privacy policy](https://www.cloudflare.com/privacypolicy/). Questions: contacto@aldomatias.com.
+
 ### Streamable HTTP
 
 ```bash

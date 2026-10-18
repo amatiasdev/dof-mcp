@@ -1,7 +1,7 @@
 # One-time setup, applied by the owner with local credentials (AWS SSO profile "personal"):
 # the S3 bucket for the app's Terraform state, GitHub's OIDC provider, and the role the release
-# workflow assumes to update the Lambda code. Its own state stays local (terraform.tfstate here,
-# git-ignored); it rarely changes.
+# workflow assumes to update the Lambda code. Its state is kept in that same bucket (see the
+# backend block below); it rarely changes.
 
 terraform {
   required_version = ">= 1.10"
@@ -10,6 +10,16 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.69"
     }
+  }
+
+  # State lives in the bucket this stack creates. The very first apply ran with local state
+  # and was then migrated (terraform init -migrate-state -backend-config=backend.hcl); to
+  # rebuild from scratch, comment this block out, apply, and migrate again.
+  backend "s3" {
+    key          = "bootstrap/terraform.tfstate"
+    region       = "mx-central-1"
+    encrypt      = true
+    use_lockfile = true
   }
 }
 

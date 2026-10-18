@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { citeNote, DofClient } from "../src/index.js";
 import {
   createLambdaHandler,
+  describeRequest,
+  describeResponse,
   type HttpApiEvent,
   ORIGIN_SECRET_HEADER,
   readLambdaConfig,
@@ -147,6 +149,61 @@ describe("createLambdaHandler", () => {
     const result = await handler(event({ body: `${initialize}${" ".repeat(70_000)}` }));
 
     expect(result.statusCode).toBe(413);
+  });
+});
+
+describe("usage metrics", () => {
+  it("reads the client from initialize and the tool from tools/call", () => {
+    expect(describeRequest({ body: initialize, isBase64Encoded: false })).toEqual({
+      rpc: "initialize",
+      client: "test",
+      clientVersion: "1.0.0",
+    });
+    const call = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "dof_get_note",
+        arguments: { id: 5801457 },
+        _meta: { "io.modelcontextprotocol/clientInfo": { name: "claude-ai", version: "0.1" } },
+      },
+    });
+    expect(describeRequest({ body: call, isBase64Encoded: false })).toEqual({
+      rpc: "tools/call",
+      tool: "dof_get_note",
+      client: "claude-ai",
+      clientVersion: "0.1",
+    });
+  });
+
+  it("never logs arguments and strips characters that could forge log lines", () => {
+    const call = JSON.stringify({
+      method: "tools/call",
+      params: {
+        name: 'dof_get_note"}\n{"forged":true',
+        arguments: { secret: "do-not-log" },
+        clientInfo: { name: `${"x".repeat(100)}\n` },
+      },
+    });
+    const summary = describeRequest({ body: call, isBase64Encoded: false });
+
+    expect(JSON.stringify(summary)).not.toContain("do-not-log");
+    expect(summary.tool).toBe("dof_get_noteforgedtrue");
+    expect(summary.client).toHaveLength(64);
+  });
+
+  it("ignores bodies that are not JSON-RPC", () => {
+    expect(describeRequest({ body: "not json", isBase64Encoded: false })).toEqual({});
+    expect(describeRequest({ isBase64Encoded: false })).toEqual({});
+  });
+
+  it("flags tool errors in plain and SSE responses", () => {
+    const error = JSON.stringify({ jsonrpc: "2.0", id: 1, result: { isError: true, content: [] } });
+    expect(describeResponse(error)).toEqual({ toolError: true });
+    expect(describeResponse(`event: message\ndata: ${error}\n\n`)).toEqual({ toolError: true });
+    expect(describeResponse(JSON.stringify({ result: { content: [] } }))).toEqual({});
+    expect(describeResponse("Forbidden")).toEqual({});
   });
 });
 
