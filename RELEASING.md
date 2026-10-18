@@ -18,7 +18,13 @@ npm only lets you configure a trusted publisher for a package that already exist
 first version is published by hand.
 
 1. **First publish.** With 2FA enabled on npmjs.com, from a clean checkout of `main`:
-   `npm ci && npm publish --access public` (publishes the current version; `prepack` builds it).
+   ```bash
+   npm ci --ignore-scripts && npm run lint && npm run typecheck && npm test
+   npm pack --dry-run          # expect ~19 files: dist/, LICENSE, README.md, package.json
+   npm publish --access public # prepack builds dist/; asks for your 2FA code
+   ```
+   This bootstrap version has no provenance; after the first automated release, deprecate it:
+   `npm deprecate dof-mcp@0.0.1 "Bootstrap release without provenance; use >=0.1.0"`.
 2. **Trusted publisher.** On npmjs.com, package **Settings → Trusted publishing**, add GitHub
    Actions: owner `amatiasdev`, repository `dof-mcp`, workflow `release.yml`, environment
    `release`. Allow **npm publish** (Changesets does not support staged publishing). The

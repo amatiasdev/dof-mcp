@@ -122,6 +122,31 @@ describe("DofClient hardening", () => {
   });
 });
 
+describe("DofClient validation errors", () => {
+  it("summarizes schema errors instead of serializing every issue", async () => {
+    const notes = Array.from({ length: 1000 }, () => ({}));
+    const body = JSON.stringify({ messageCode: 200, response: "OK", NotasMatutinas: notes });
+    const client = new DofClient({ fetch: fetchReturning(() => textResponse(body)) });
+
+    const error = await client.getNotes("2026-10-16").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DofApiError);
+    expect((error as Error).message.length).toBeLessThan(600);
+    expect((error as Error).message).toMatch(/NotasMatutinas\.0\.codNota: invalid_type/);
+    expect((error as Error).message).toMatch(/and \d+ more issues/);
+  });
+
+  it("rejects malformed dates from SIDOF before they reach official URLs", async () => {
+    const raw = JSON.parse(fixtureText);
+    raw.NotasMatutinas[0].fecha = "01-01-2026&x=<script>";
+    const client = new DofClient({
+      fetch: fetchReturning(() => textResponse(JSON.stringify(raw))),
+    });
+
+    await expect(client.getNotes("2026-10-16")).rejects.toThrow(/fecha: invalid_format/);
+  });
+});
+
 describe("DofClient cache", () => {
   it("reuses a cached response, keeping the original provenance", async () => {
     const fetchMock = fetchReturning(ok);

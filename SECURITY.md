@@ -28,8 +28,9 @@ GitHub security advisory.
 - **Bounded resources.** Responses are capped at 10 MiB, only responses up to 512 KiB are cached
   (256 entries), at most 4 requests run against SIDOF at once and at most 64 wait; beyond that,
   requests fail fast. Note HTML is converted to text in linear time.
-- **Release jobs.** Dependencies are installed with `--ignore-scripts` in every release job, so a
-  compromised dependency cannot run code where an npm OIDC token can be minted.
+- **CI jobs.** Every workflow installs dependencies with `--ignore-scripts`, and no job that runs
+  dependency code holds a token that can write: the release `publish` job only installs, and the
+  nightly contract test reports failures from a separate job that installs and runs nothing.
 - **Provenance, not authenticity.** Each result carries the SIDOF URL, fetch time and a SHA-256
   of the raw response. That proves what SIDOF returned and when, not that it matches the official
   publication. The official edition is the signed PDF on dof.gob.mx.

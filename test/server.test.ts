@@ -16,6 +16,7 @@ function fixture(name: string): unknown {
 const routes: Record<string, unknown> = {
   "/dof/sidof/notas/16-10-2026": fixture("notas-16-10-2026.json"),
   "/dof/sidof/notas/nota/5801457": fixture("nota-5801457.json"),
+  "/dof/sidof/notas/nota/1": fixture("nota-not-found.json"),
   "/dof/sidof/indicadores/16-10-2026": fixture("indicadores-16-10-2026.json"),
   "/dof/sidof/indicadores/158/01-10-2026/16-10-2026": fixture(
     "indicadores-158-01-10-2026-16-10-2026.json",
@@ -24,6 +25,10 @@ const routes: Record<string, unknown> = {
 
 const sidofFetch: typeof fetch = async (input) => {
   const { pathname } = new URL(input instanceof Request ? input.url : input);
+  // Recorded live: indicators for a date without data answer HTTP 404 with this body.
+  if (pathname === "/dof/sidof/indicadores/15-10-2026") {
+    return Response.json({ messageCode: 404, response: "NOT_FOUND" }, { status: 404 });
+  }
   const body = routes[pathname];
   return body === undefined
     ? new Response("{}", { status: 500 })
@@ -198,6 +203,33 @@ describe("dof_get_indicators", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toMatch(message);
+  });
+});
+
+describe("not-found and future dates", () => {
+  it("reports an unknown note id without suggesting a retry", async () => {
+    const result = await call("dof_get_note", { id: 1 });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toBe("Note 1 does not exist in SIDOF");
+  });
+
+  it("reports a date without indicators as not found, not as an outage", async () => {
+    const result = await call("dof_get_indicators", { date: "2026-10-15" });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/has no data .*HTTP 404/);
+    expect(result.content[0]?.text).not.toMatch(/Try again/);
+  });
+
+  it.each([
+    ["dof_daily_summary", { date: "2999-01-04" }],
+    ["dof_get_indicators", { date: "2999-01-04" }],
+  ])("rejects future dates in %s", async (tool, args) => {
+    const result = await call(tool, args);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/2999-01-04 is in the future/);
   });
 });
 

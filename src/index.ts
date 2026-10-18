@@ -1,5 +1,5 @@
 export * from "./client.js";
-export { htmlToText } from "./html.js";
+export { HtmlTooDeepError, htmlToText, MAX_HTML_DEPTH } from "./html.js";
 export { createDofHttpHandler, type DofHttpHandler, type DofHttpHandlerOptions } from "./http.js";
 export * from "./schema.js";
 export { createDofServer, todayInMexico } from "./server.js";

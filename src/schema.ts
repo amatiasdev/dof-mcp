@@ -6,6 +6,9 @@ export const rawEnvelopeSchema = z.object({
   response: z.string(),
 });
 
+/** SIDOF dates are DD-MM-YYYY. Validated because they end up in ISO dates and official URLs. */
+const sidofDate = z.string().regex(/^\d{2}-\d{2}-\d{4}$/, "Expected a DD-MM-YYYY date");
+
 /** Some SIDOF endpoints write absent values as the string "null"; treat those as missing. */
 const sidofText = z
   .string()
@@ -21,7 +24,7 @@ export const rawNoteSchema = z.object({
   codNota: z.number().int(),
   titulo: z.string().optional(),
   codSeccion: z.string(),
-  fecha: z.string(),
+  fecha: sidofDate,
   codDiario: z.number().int(),
   existeHtml: z.string(),
   existeDoc: z.string(),
@@ -48,7 +51,7 @@ export const rawNoteDetailSchema = z.object({
   codNota: z.number().int(),
   titulo: z.string(),
   codSeccion: z.string(),
-  fecha: z.string(),
+  fecha: sidofDate,
   codDiario: z.number().int(),
   cadenaContenido: sidofText,
   existeDoc: z.string(),
@@ -66,11 +69,17 @@ export const rawNoteDetailResponseSchema = rawEnvelopeSchema.extend({
   Nota: rawNoteDetailSchema,
 });
 
+/** The note-detail endpoint answers an unknown id with 200 and `"Nota": []`. */
+export const rawNoteLookupResponseSchema = rawEnvelopeSchema.extend({
+  tamanioExcesivo: z.boolean().optional(),
+  Nota: z.union([rawNoteDetailSchema, z.array(z.unknown()).length(0)]),
+});
+
 /** Raw indicator as returned by the SIDOF `indicadores/...` endpoints. */
 export const rawIndicatorSchema = z.object({
   codIndicador: z.number().int(),
   codTipoIndicador: z.number().int(),
-  fecha: z.string(),
+  fecha: sidofDate,
   /** Decimal string, sometimes with a trailing "%". */
   valor: z.string(),
 });

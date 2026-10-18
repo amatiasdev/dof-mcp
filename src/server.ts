@@ -1,6 +1,6 @@
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { DofApiError, DofClient } from "./client.js";
+import { DofApiError, DofClient, DofNotFoundError } from "./client.js";
 import { EDITIONS, INDICATORS, type IndicatorKey } from "./schema.js";
 import { VERSION } from "./version.js";
 
@@ -21,6 +21,15 @@ const SOURCE_NOTICE =
 /** Today's date in Mexico City, as YYYY-MM-DD. */
 export function todayInMexico(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: DOF_TIME_ZONE }).format(now);
+}
+
+/** A tool error for dates after today in Mexico City, or undefined when the date is fine. */
+function futureDateError(date: string | undefined): CallToolResult | undefined {
+  const today = todayInMexico();
+  if (date === undefined || date <= today) return undefined;
+  return fail(
+    `${date} is in the future (today in Mexico City is ${today}); nothing is published yet.`,
+  );
 }
 
 function daysBetween(from: string, to: string): number {
@@ -44,11 +53,21 @@ async function guarded(run: () => Promise<CallToolResult>): Promise<CallToolResu
     return await run();
   } catch (error) {
     if (error instanceof RangeError) return fail(error.message);
+    // Not found is an answer, not an outage: no retry hint, so the model doesn't loop.
+    if (error instanceof DofNotFoundError) return fail(error.message);
     if (error instanceof DofApiError) {
       return fail(`SIDOF request failed: ${error.message}. Try again later.`);
     }
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "TypeError")) {
-      return fail(`Could not reach SIDOF (${error.message}). Try again later.`);
+    // fetch reports network failures as TypeError("fetch failed"); any other TypeError is a bug
+    // and is rethrown rather than misreported as an outage.
+    const networkError =
+      error instanceof Error &&
+      (error.name === "TimeoutError" ||
+        (error instanceof TypeError && error.message === "fetch failed"));
+    if (networkError) {
+      const code = (error.cause as { code?: unknown } | undefined)?.code;
+      const detail = typeof code === "string" ? `${error.message}: ${code}` : error.message;
+      return fail(`Could not reach SIDOF (${detail}). Try again later.`);
     }
     throw error;
   }
@@ -166,6 +185,8 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
     },
     ({ date, edition, organization, limit }) =>
       guarded(async () => {
+        const future = futureDateError(date);
+        if (future) return future;
         const day = date ?? todayInMexico();
         const needle = organization?.toLocaleLowerCase("es-MX");
         const { data, source: provenance } = await client.getNotesWithSource(day);
@@ -279,6 +300,8 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
           const series = await client.getIndicatorSeriesWithSource(indicator, from, to);
           return ok({ indicators: series.data, source: SOURCE_NOTICE, provenance: series.source });
         }
+        const future = futureDateError(date);
+        if (future) return future;
         const day = await client.getIndicatorsWithSource(date);
         return ok({ indicators: day.data, source: SOURCE_NOTICE, provenance: day.source });
       }),

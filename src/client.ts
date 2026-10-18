@@ -15,7 +15,7 @@ import {
   rawDailyResponseSchema,
   rawEnvelopeSchema,
   rawIndicatorsResponseSchema,
-  rawNoteDetailResponseSchema,
+  rawNoteLookupResponseSchema,
 } from "./schema.js";
 import { VERSION } from "./version.js";
 
@@ -66,6 +66,14 @@ export class DofApiError extends Error {
   ) {
     super(message);
     this.name = "DofApiError";
+  }
+}
+
+/** SIDOF has no such resource: an unknown note id, or a date with no published data. */
+export class DofNotFoundError extends DofApiError {
+  constructor(message: string) {
+    super(message, 404);
+    this.name = "DofNotFoundError";
   }
 }
 
@@ -207,6 +215,20 @@ class RetryAfterError extends DofApiError {
   ) {
     super(message, status);
   }
+}
+
+const MAX_REPORTED_ISSUES = 3;
+
+/**
+ * Summarizes a Zod error in a few hundred characters. `error.message` serializes every issue,
+ * which for a large payload with a changed shape can reach megabytes and flood the model.
+ */
+function describeIssues(error: z.ZodError): string {
+  const shown = error.issues
+    .slice(0, MAX_REPORTED_ISSUES)
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`.slice(0, 120));
+  const more = error.issues.length - shown.length;
+  return more > 0 ? `${shown.join("; ")} (and ${more} more issues)` : shown.join("; ");
 }
 
 function mapSourced<T, U>(sourced: Sourced<T>, map: (data: T) => U): Sourced<U> {
@@ -363,8 +385,10 @@ export class DofClient {
     if (!Number.isSafeInteger(id) || id <= 0) {
       throw new RangeError(`Expected a positive integer note id, got ${id}`);
     }
-    const raw = await this.request(`/notas/nota/${id}`, rawNoteDetailResponseSchema);
-    return mapSourced(raw, normalizeNoteDetail);
+    const { data, source } = await this.request(`/notas/nota/${id}`, rawNoteLookupResponseSchema);
+    const nota = data.Nota;
+    if (Array.isArray(nota)) throw new DofNotFoundError(`Note ${id} does not exist in SIDOF`);
+    return { data: normalizeNoteDetail({ ...data, Nota: nota }), source };
   }
 
   /** Returns the indicators SIDOF lists for a day, or for today when no date is given. */
@@ -437,7 +461,7 @@ export class DofClient {
     const { body, source } = await this.fetchWithRetries(url);
     const envelope = rawEnvelopeSchema.safeParse(body);
     if (!envelope.success) {
-      throw new DofApiError(`Unexpected SIDOF response shape: ${envelope.error.message}`);
+      throw new DofApiError(`Unexpected SIDOF response shape: ${describeIssues(envelope.error)}`);
     }
     if (envelope.data.messageCode !== 200) {
       throw new DofApiError(
@@ -446,7 +470,7 @@ export class DofClient {
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      throw new DofApiError(`Unexpected SIDOF response shape: ${parsed.error.message}`);
+      throw new DofApiError(`Unexpected SIDOF response shape: ${describeIssues(parsed.error)}`);
     }
     return { data: parsed.data, source };
   }
@@ -496,6 +520,9 @@ export class DofClient {
     }
     if (!res.ok) {
       await res.body?.cancel().catch(() => {});
+      if (res.status === 404) {
+        throw new DofNotFoundError(`SIDOF has no data for ${new URL(url).pathname} (HTTP 404)`);
+      }
       throw new DofApiError(`SIDOF responded ${res.status}`, res.status);
     }
     const fetchedAt = new Date().toISOString();

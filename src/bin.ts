@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from "node:http";
-import { parseArgs } from "node:util";
+import { type ParseArgsConfig, parseArgs } from "node:util";
 import { type NodeIncomingMessageLike, toNodeHandler } from "@modelcontextprotocol/node";
 import { localhostAllowedHostnames } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
@@ -18,18 +18,31 @@ HTTP options:
   --port <n>                    port to listen on (default 3000)
   --host <addr>                 address to bind (default 127.0.0.1)
   --allowed-host <name>         extra hostname accepted in the Host header (repeatable)
+
+Other options:
+  -h, --help                    show this help
+  -v, --version                 print the version
 `;
 
-const { values } = parseArgs({
-  options: {
-    http: { type: "boolean", default: false },
-    port: { type: "string", default: "3000" },
-    host: { type: "string", default: "127.0.0.1" },
-    "allowed-host": { type: "string", multiple: true, default: [] },
-    help: { type: "boolean", short: "h", default: false },
-    version: { type: "boolean", short: "v", default: false },
-  },
-});
+const OPTIONS = {
+  http: { type: "boolean", default: false },
+  port: { type: "string", default: "3000" },
+  host: { type: "string", default: "127.0.0.1" },
+  "allowed-host": { type: "string", multiple: true, default: [] as string[] },
+  help: { type: "boolean", short: "h", default: false },
+  version: { type: "boolean", short: "v", default: false },
+} satisfies NonNullable<ParseArgsConfig["options"]>;
+
+function parseCliArgs() {
+  try {
+    return parseArgs({ options: OPTIONS }).values;
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\n${USAGE}`);
+    process.exit(1);
+  }
+}
+
+const values = parseCliArgs();
 
 if (values.help) {
   process.stdout.write(USAGE);
@@ -54,6 +67,16 @@ if (values.help) {
   const nodeHandler = toNodeHandler(handler);
   // node:http always sets `method` on server requests; the adapter's type just doesn't know it.
   const server = createServer((req, res) => void nodeHandler(req as NodeIncomingMessageLike, res));
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    const reason =
+      error.code === "EADDRINUSE"
+        ? `port ${port} is already in use`
+        : error.code === "EACCES"
+          ? `permission denied for ${values.host}:${port}`
+          : error.message;
+    process.stderr.write(`dof-mcp: cannot listen: ${reason}\n`);
+    process.exit(1);
+  });
   server.listen(port, values.host, () => {
     process.stderr.write(`dof-mcp ${VERSION} listening on http://${values.host}:${port}/mcp\n`);
   });

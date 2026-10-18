@@ -27,7 +27,7 @@ Every result includes:
 
 ### Install
 
-Requires Node.js 22 or later. Add it to your MCP client configuration (stdio):
+Requires Node.js 22 or later. The server runs over stdio; add it to your MCP client:
 
 ```json
 {
@@ -37,11 +37,10 @@ Requires Node.js 22 or later. Add it to your MCP client configuration (stdio):
 }
 ```
 
-With Claude Code:
-
-```bash
-claude mcp add dof -- npx -y dof-mcp
-```
+- **Claude Desktop:** Settings → Developer → Edit Config, which opens `claude_desktop_config.json` (`%APPDATA%\Claude\` on Windows, `~/Library/Application Support/Claude/` on macOS).
+- **Cursor:** `.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` for every project.
+- **Claude Code:** `claude mcp add dof -- npx -y dof-mcp`
+- **Windows:** if your client cannot start `npx` directly, use `"command": "cmd", "args": ["/c", "npx", "-y", "dof-mcp"]`.
 
 ### Streamable HTTP
 
@@ -52,6 +51,8 @@ npx dof-mcp --http --port 3000   # endpoint http://127.0.0.1:3000/mcp, probe /he
 The HTTP transport is stateless, binds to `127.0.0.1` and validates the `Host` and `Origin` headers (`--allowed-host <name>` adds hostnames). It has no authentication or rate limiting: to expose it beyond localhost, put it behind a reverse proxy that adds them. See [SECURITY.md](SECURITY.md).
 
 ## Client
+
+The package is ESM. `import` works everywhere; `require("dof-mcp")` works on Node.js 22.12 and later (`require(esm)`).
 
 ```ts
 import { DofClient } from "dof-mcp";
@@ -112,7 +113,9 @@ npm run test:live   # contract tests against the live API
 
 ## Disclaimer
 
-Unofficial project, not affiliated with the Secretaría de Gobernación. Data comes from the public SIDOF API and may change without notice; always confirm against the official DOF publication. SIDOF's [legal notice](https://sidof.segob.gob.mx/avisoLegal) allows non-commercial reproduction of its content.
+Unofficial project, not affiliated with the Secretaría de Gobernación. Data comes from the public SIDOF API and may change without notice. The text this package returns is a plain-text conversion, not the official edition: the official DOF is the signed PDF on dof.gob.mx, so always confirm against it.
+
+The MIT license covers this code, not DOF content. SIDOF's [legal notice](https://sidof.segob.gob.mx/avisoLegal) allows reproducing its content for non-commercial purposes when the source is cited; commercial use requires written consent from the Secretaría de Gobernación. If you republish content obtained with this package, cite the Diario Oficial de la Federación as the source.
 
 ## License
 
