@@ -96,17 +96,19 @@ resource "aws_cloudwatch_query_definition" "weekly_clients" {
   log_group_names = [aws_cloudwatch_log_group.lambda.name]
   query_string    = <<-EOT
     filter ispresent(client)
-    | stats count_distinct(client) as clients, count(*) as requests by bin(7d)
-    | sort bin(7d) desc
+    | stats count_distinct(client) as clients, count(*) as sessions by bin(7d) as week
+    | sort week desc
   EOT
 }
 
+# By tool only: 2025-era clients send their name just in `initialize`, and the endpoint is
+# stateless, so a tools/call line usually has no client to group by.
 resource "aws_cloudwatch_query_definition" "tool_usage" {
   name            = "${var.function_name}/tool-usage"
   log_group_names = [aws_cloudwatch_log_group.lambda.name]
   query_string    = <<-EOT
     filter rpc = "tools/call"
-    | stats count(*) as calls, sum(toolError) as errors, avg(ms) as avg_ms by tool, client
+    | stats count(*) as calls, sum(toolError) as errors, avg(ms) as avg_ms by tool
     | sort calls desc
   EOT
 }
