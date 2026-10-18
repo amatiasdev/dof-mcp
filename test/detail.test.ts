@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DofApiError,
   DofClient,
+  HtmlTooDeepError,
   htmlToText,
   normalizeIndicator,
   normalizeNoteDetail,
@@ -50,6 +51,17 @@ describe("htmlToText", () => {
     const started = performance.now();
     htmlToText(html);
     expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("fails fast on absurdly deep nesting instead of stalling", () => {
+    const started = performance.now();
+    expect(() => htmlToText("<div>".repeat(320_000))).toThrow(HtmlTooDeepError);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("accepts long documents whose tags are closed or implied", () => {
+    expect(htmlToText("<p>a</p>".repeat(50_000))).toContain("a");
+    expect(htmlToText("<p>a<br>".repeat(5_000))).toContain("a");
   });
 
   it("leaves unknown entities untouched", () => {

@@ -10,3 +10,4 @@ Pre-publish review fixes:
 - CLI: readable errors for unknown options and busy ports; `--help` lists `-h` and `-v`
 - Network errors include the cause code (for example `ENOTFOUND`)
 - README: client setup for Claude Desktop, Cursor and Windows; license scope of DOF content
+- Security audit: note HTML nested more than 1000 levels fails fast with `HtmlTooDeepError` (htmlparser2's stack is O(depth) per tag); schema errors are summarized in a few hundred characters instead of serializing every issue; SIDOF dates are validated before they reach official URLs; only real network failures are reported as "could not reach SIDOF"

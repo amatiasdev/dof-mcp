@@ -58,7 +58,13 @@ async function guarded(run: () => Promise<CallToolResult>): Promise<CallToolResu
     if (error instanceof DofApiError) {
       return fail(`SIDOF request failed: ${error.message}. Try again later.`);
     }
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "TypeError")) {
+    // fetch reports network failures as TypeError("fetch failed"); any other TypeError is a bug
+    // and is rethrown rather than misreported as an outage.
+    const networkError =
+      error instanceof Error &&
+      (error.name === "TimeoutError" ||
+        (error instanceof TypeError && error.message === "fetch failed"));
+    if (networkError) {
       const code = (error.cause as { code?: unknown } | undefined)?.code;
       const detail = typeof code === "string" ? `${error.message}: ${code}` : error.message;
       return fail(`Could not reach SIDOF (${detail}). Try again later.`);

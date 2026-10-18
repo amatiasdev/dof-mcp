@@ -217,6 +217,20 @@ class RetryAfterError extends DofApiError {
   }
 }
 
+const MAX_REPORTED_ISSUES = 3;
+
+/**
+ * Summarizes a Zod error in a few hundred characters. `error.message` serializes every issue,
+ * which for a large payload with a changed shape can reach megabytes and flood the model.
+ */
+function describeIssues(error: z.ZodError): string {
+  const shown = error.issues
+    .slice(0, MAX_REPORTED_ISSUES)
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`.slice(0, 120));
+  const more = error.issues.length - shown.length;
+  return more > 0 ? `${shown.join("; ")} (and ${more} more issues)` : shown.join("; ");
+}
+
 function mapSourced<T, U>(sourced: Sourced<T>, map: (data: T) => U): Sourced<U> {
   return { data: map(sourced.data), source: sourced.source };
 }
@@ -447,7 +461,7 @@ export class DofClient {
     const { body, source } = await this.fetchWithRetries(url);
     const envelope = rawEnvelopeSchema.safeParse(body);
     if (!envelope.success) {
-      throw new DofApiError(`Unexpected SIDOF response shape: ${envelope.error.message}`);
+      throw new DofApiError(`Unexpected SIDOF response shape: ${describeIssues(envelope.error)}`);
     }
     if (envelope.data.messageCode !== 200) {
       throw new DofApiError(
@@ -456,7 +470,7 @@ export class DofClient {
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      throw new DofApiError(`Unexpected SIDOF response shape: ${parsed.error.message}`);
+      throw new DofApiError(`Unexpected SIDOF response shape: ${describeIssues(parsed.error)}`);
     }
     return { data: parsed.data, source };
   }
