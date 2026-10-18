@@ -1,5 +1,11 @@
 # dof-mcp
 
+## 0.2.2
+
+### Patch Changes
+
+- [#17](https://github.com/amatiasdev/dof-mcp/pull/17) [`731a419`](https://github.com/amatiasdev/dof-mcp/commit/731a419f126494b9ef6b6d6e957e3cdc774ca120) Thanks [@amatiasdev](https://github.com/amatiasdev)! - README on npm: hosted endpoint privacy notice, project badges, and links to the new documentation (`docs/`: index and full tool reference).
+
 ## 0.2.1
 
 ### Patch Changes
