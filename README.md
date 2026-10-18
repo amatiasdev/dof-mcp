@@ -42,6 +42,16 @@ Requires Node.js 22 or later. The server runs over stdio; add it to your MCP cli
 - **Claude Code:** `claude mcp add dof -- npx -y dof-mcp`
 - **Windows:** if your client cannot start `npx` directly, use `"command": "cmd", "args": ["/c", "npx", "-y", "dof-mcp"]`.
 
+### Hosted endpoint (no install)
+
+A public instance runs at **`https://mcp.aldomatias.com/mcp`** (Streamable HTTP, no authentication, rate limited). Use it from clients that accept remote MCP servers, such as custom connectors in Claude, or:
+
+```bash
+claude mcp add --transport http dof https://mcp.aldomatias.com/mcp
+```
+
+It serves the same tools and the same release as the npm package. It is a free, best-effort service with no SLA; for heavy use, run the package yourself.
+
 ### Streamable HTTP
 
 ```bash
