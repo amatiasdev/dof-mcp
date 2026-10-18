@@ -3,6 +3,8 @@
 [![CI](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml)
 [![Contract](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml/badge.svg)](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/amatiasdev/dof-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/amatiasdev/dof-mcp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15638/badge)](https://www.bestpractices.dev/projects/15638)
+[![npm](https://img.shields.io/npm/v/dof-mcp)](https://www.npmjs.com/package/dof-mcp)
 
 MCP server and typed TypeScript client for Mexico's **Diario Oficial de la Federación** (DOF), built on the public SIDOF JSON API, so AI agents (Claude Code, Claude Desktop, Cursor, etc.) can read official publications and financial indicators.
 
