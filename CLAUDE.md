@@ -26,7 +26,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - `src/version.ts`: version reported to MCP clients; a test keeps it equal to package.json
 - `src/index.ts`: public exports
 - `scripts/sync-version.mjs`: copies the package.json version into `src/version.ts`, `server.json` and the lockfile (run by `npm run version-packages`)
-- `test/fixtures/`: real recorded SIDOF responses; tests run against these, not hand-written mocks. `test/server.test.ts` drives the server with the official MCP client
+- `test/fixtures/`: real recorded SIDOF responses; tests run against these, not hand-written mocks. `test/server.test.ts` drives the server with the official MCP client; `test/properties.test.ts` fuzzes the untrusted-input paths with fast-check
 
 ## SIDOF API facts (verified 2026-10-17)
 
