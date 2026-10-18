@@ -1,3 +1,11 @@
 node_modules/
 dist/
 coverage/
+build/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.tfstate.lock.info
+crash.log
+backend.hcl

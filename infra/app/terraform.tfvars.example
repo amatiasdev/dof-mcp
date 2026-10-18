@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+account_id   = "123456789012"
+budget_email = "you@example.com"
+
+# After the ACM validation CNAME exists in Cloudflare:
+# dns_validated = true
+
+# While the Lambda concurrency quota is still 10, reservations are impossible:
+# reserved_concurrency = -1
