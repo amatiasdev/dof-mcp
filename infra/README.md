@@ -72,6 +72,15 @@ Fill in the account ID (and, for the app, the budget email). Both files are git-
 
 After this, every release deploys new code automatically (`build-lambda` and `deploy-lambda` in `.github/workflows/release.yml`).
 
+## Manual code update
+
+Releases deploy automatically. To push code by hand, zip `build/lambda/` with forward-slash paths: `zip -qr ../lambda.zip .` from Git Bash or Linux, not PowerShell 5.1's `Compress-Archive`, which writes `dist\lambda.js` with backslashes. Then:
+
+```bash
+aws lambda update-function-code --function-name dof-mcp --zip-file fileb://build/lambda.zip \
+  --profile personal --region mx-central-1
+```
+
 ## Kill switch
 
 Any one of these takes the endpoint offline:

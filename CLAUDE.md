@@ -75,7 +75,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 ## Roadmap
 
 - **v0.1** (released 2026-10-18): MCP server and client, hardening, provenance, release pipeline, MCP Registry
-- **Hosted endpoint** (in progress): infrastructure applied; goes live once the Lambda concurrency quota is approved and the `mcp` CNAME is created
+- **Hosted endpoint** (live since 2026-10-18): `https://mcp.aldomatias.com/mcp`, verified end to end with modern and legacy (SDK v1) clients; requests that bypass Cloudflare get 403
 - **Later, optional:** local search index for `dof_search_notes` (SIDOF's search is broken), Banxico SIE indicators, PDF signature verification
 
 Out of scope: hosted paid service, monitoring or alerting products, RAG/embeddings, full historical backfill.
