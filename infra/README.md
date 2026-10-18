@@ -70,7 +70,7 @@ Fill in the account ID (and, for the app, the budget email). Both files are git-
    npx @modelcontextprotocol/inspector --cli https://mcp.aldomatias.com/mcp --method tools/list
    ```
 
-After this, every release deploys new code automatically (`build-lambda` and `deploy-lambda` in `.github/workflows/release.yml`).
+After this, every release deploys new code automatically (`.github/workflows/deploy-lambda.yml`, called from `release.yml`). To redeploy the latest release by hand: Actions → Deploy Lambda → Run workflow on `main`, or `gh workflow run deploy-lambda.yml --ref main`.
 
 ## Manual code update
 
