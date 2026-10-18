@@ -1,7 +1,7 @@
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { DofApiError, DofClient, DofNotFoundError } from "./client.js";
-import { EDITIONS, INDICATORS, type IndicatorKey } from "./schema.js";
+import { EDITIONS, INDICATORS, type IndicatorKey, type NoteDetail } from "./schema.js";
 import { VERSION } from "./version.js";
 
 const DOF_TIME_ZONE = "America/Mexico_City";
@@ -21,6 +21,34 @@ const SOURCE_NOTICE =
 /** Today's date in Mexico City, as YYYY-MM-DD. */
 export function todayInMexico(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: DOF_TIME_ZONE }).format(now);
+}
+
+/**
+ * Cites a note in the format SIDOF's legal notice requires for reproducing its content: title,
+ * issuing authority, place, DOF and publication date, citation date in brackets, and where the
+ * HTML version is available. See https://sidof.segob.gob.mx/avisoLegal.
+ */
+export function citeNote(
+  note: Pick<NoteDetail, "title" | "date" | "branch" | "organizations" | "officialUrl">,
+  citedAt: Date,
+): string {
+  const [year, month, day] = note.date.split("-");
+  const cited = new Intl.DateTimeFormat("es-MX", {
+    timeZone: DOF_TIME_ZONE,
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(citedAt);
+  const authority = note.organizations[0] ?? note.branch;
+  // SIDOF titles usually end with a period, which would read ".," before the authority.
+  // A loop, not /\.+$/: that regex backtracks quadratically on runs of dots mid-title.
+  let end = note.title.length;
+  while (end > 0 && note.title[end - 1] === ".") end--;
+  return (
+    `${note.title.slice(0, end)}, ${authority}; Estados Unidos Mexicanos; ` +
+    `DOF ${day}/${month}/${year}; ` +
+    `[citado el ${cited}]; disponible en versión HTML en internet: ${note.officialUrl}`
+  );
 }
 
 /** A tool error for dates after today in Mexico City, or undefined when the date is fine. */
@@ -117,6 +145,9 @@ const noteOutput = z.object({
   hasDoc: z.boolean(),
   contentTooLarge: z.boolean(),
   officialUrl: z.string(),
+  citation: z
+    .string()
+    .describe("Citation in the format SIDOF's legal notice requires when reproducing the text"),
   text: z.string(),
   offset: z.number().int(),
   totalChars: z.number().int(),
@@ -260,6 +291,7 @@ export function createDofServer(client: DofClient = new DofClient()): McpServer 
           offset,
           totalChars: note.text.length,
           ...(end < note.text.length ? { nextOffset: end } : {}),
+          citation: citeNote(note, new Date(provenance.fetchedAt)),
           source: SOURCE_NOTICE,
           provenance,
         });
