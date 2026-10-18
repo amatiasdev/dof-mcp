@@ -1,5 +1,11 @@
 # dof-mcp
 
+## 0.2.1
+
+### Patch Changes
+
+- [#8](https://github.com/amatiasdev/dof-mcp/pull/8) [`5b9801a`](https://github.com/amatiasdev/dof-mcp/commit/5b9801a255fba7ba36737d2609c9558a432e1f7e) Thanks [@amatiasdev](https://github.com/amatiasdev)! - Hosted endpoint: each request's log line now records the JSON-RPC method, the tool name, the client's self-reported name and version, and whether the tool returned an error. IPs and tool arguments are never logged; client-supplied labels are sanitized and truncated.
+
 ## 0.2.0
 
 ### Minor Changes
