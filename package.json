@@ -1,6 +1,6 @@
 {
   "name": "dof-mcp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "mcpName": "io.github.amatiasdev/dof-mcp",
   "description": "Typed TypeScript client and MCP server for Mexico's Diario Oficial de la Federación (SIDOF API).",
   "type": "module",
