@@ -21,7 +21,8 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - `src/schema.ts`: Zod schemas for raw SIDOF payloads, normalized types, `INDICATORS` code table
 - `src/client.ts`: `DofClient` (`getNotes`, `getNote`, `getIndicators`, `getIndicatorSeries`, each with a `*WithSource` variant returning provenance; no redirects, size cap, retries with jitter on network/429/5xx, TTL cache, concurrency limit), normalizers, `toSidofDate`, `officialNoteUrl`
 - `src/html.ts`: `htmlToText` for note content, built on the htmlparser2 tokenizer (no regex over HTML)
-- `src/server.ts`: `createDofServer` (MCP tools); `src/http.ts`: `createDofHttpHandler` (stateless Streamable HTTP, Host/Origin checks, `/healthz`); `src/bin.ts`: CLI (stdio default, `--http`)
+- `src/server.ts`: `createDofServer` (MCP tools); `src/http.ts`: `createDofHttpHandler` (stateless Streamable HTTP, Host/Origin checks, `/healthz`); `src/bin.ts`: CLI (stdio default, `--http`); `src/lambda.ts`: AWS Lambda adapter for the hosted endpoint (not exported from the index)
+- `infra/`: Terraform for the hosted endpoint (`bootstrap/` once, `app/` for Lambda, API Gateway, ACM, budget); runbook in `infra/README.md`
 - `src/version.ts`: version reported to MCP clients; a test keeps it equal to package.json
 - `src/index.ts`: public exports
 - `scripts/sync-version.mjs`: copies the package.json version into `src/version.ts`, `server.json` and the lockfile (run by `npm run version-packages`)
@@ -63,10 +64,18 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - User-facing changes need a changeset (`npx changeset`)
 - Node.js 22+ (Node 20 is EOL)
 
-## Roadmap (scope: v0.1)
+## Hosted endpoint (https://mcp.aldomatias.com/mcp)
 
-- **F1** (done): client methods for note detail and indicators; MCP server (stdio + Streamable HTTP) with read-only tools `dof_daily_summary`, `dof_get_note`, `dof_get_indicators`
-- **F2** (done in code): hardened client and provenance, pinned CI with CodeQL and Scorecard, Dependabot, SECURITY.md, nightly contract test, Changesets release pipeline with npm trusted publishing and MCP Registry publish. Still needs the owner's one-time steps in RELEASING.md (first manual npm publish, trusted publisher, `release` environment)
-- **F3** (optional, after v0.1): hosted endpoint on the owner's personal AWS account (Lambda + EventBridge for nightly ingest + DynamoDB/S3) and a local search index for `dof_search_notes`
+- The owner's personal AWS account (SSO profile `personal`), region `mx-central-1`. Its ID lives only in the git-ignored `infra/*/terraform.tfvars` and `infra/app/backend.hcl`; never commit it. Never deploy to any other account: the default CLI profile on this machine points elsewhere, and Terraform pins `allowed_account_ids`
+- Cloudflare (zone aldomatias.com, free plan) proxies `mcp`, enforces Full (strict) TLS and a per-IP rate limit, and adds the `x-dof-origin-secret` header; the Lambda refuses requests without it
+- Hard caps: API Gateway throttling 5 rps / burst 10 and Lambda reserved concurrency 3. Budget alerts at $5 and $15 to contacto@aldomatias.com
+- Never print or paste the origin secret; rotate it with `terraform apply -replace=random_password.origin_secret` and update the Cloudflare rule from the clipboard
+- Releases deploy new code automatically (`build-lambda` without AWS access, `deploy-lambda` with OIDC); infrastructure changes go through the owner's `terraform apply`
+
+## Roadmap
+
+- **v0.1** (released 2026-10-18): MCP server and client, hardening, provenance, release pipeline, MCP Registry
+- **Hosted endpoint** (in progress): infrastructure applied; goes live once the Lambda concurrency quota is approved and the `mcp` CNAME is created
+- **Later, optional:** local search index for `dof_search_notes` (SIDOF's search is broken), Banxico SIE indicators, PDF signature verification
 
 Out of scope: hosted paid service, monitoring or alerting products, RAG/embeddings, full historical backfill.
