@@ -1,7 +1,11 @@
 name: Contract
 
 # Nightly check that the live SIDOF API still matches the schemas this package relies on.
-# On failure it opens (or comments on) an issue labeled "contract".
+# On failure a separate job opens (or comments on) an issue labeled "contract".
+#
+# Two jobs on purpose: `live` runs third-party code (npm dependencies, vitest) with a read-only
+# token, and `report` holds the only token that can write issues but checks out and installs
+# nothing. Jobs run on separate machines, so code in `live` cannot reach `report`'s token.
 
 on:
   schedule:
@@ -14,9 +18,9 @@ permissions:
 jobs:
   live:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,23 +28,35 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+          # No shared npm cache: this job must not be able to seed one that other workflows restore.
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
       - run: npm run test:live
-      - name: Report failure
-        if: failure()
+
+  report:
+    needs: live
+    # failure() is required: without a status function GitHub adds success() and the job would
+    # never run. The result check keeps a cancelled `live` from opening an issue.
+    if: failure() && needs.live.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the contract issue
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label contract --state open \
-            --json number --jq '.[0].number')
+          existing=$(gh issue list --repo "$REPO" --label contract --state open \
+            --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Failed again: $RUN_URL"
+            gh issue comment "$existing" --repo "$REPO" --body "Failed again: $RUN_URL"
           else
-            gh label create contract --repo "$GITHUB_REPOSITORY" --color B60205 \
-              --description "Live SIDOF API contract" 2>/dev/null || true
-            gh issue create --repo "$GITHUB_REPOSITORY" --label contract \
+            gh label create contract --repo "$REPO" --force --color B60205 \
+              --description "Live SIDOF API contract"
+            gh issue create --repo "$REPO" --label contract \
               --title "SIDOF contract test failed" \
               --body "The nightly contract test against the live SIDOF API failed: $RUN_URL"
           fi
