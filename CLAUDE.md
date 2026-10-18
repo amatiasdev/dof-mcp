@@ -70,7 +70,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - Cloudflare (zone aldomatias.com, free plan) proxies `mcp`, enforces Full (strict) TLS and a per-IP rate limit, and adds the `x-dof-origin-secret` header; the Lambda refuses requests without it
 - Hard caps: API Gateway throttling 5 rps / burst 10 and Lambda reserved concurrency 3. Budget alerts at $5 and $15 to contacto@aldomatias.com
 - Never print or paste the origin secret; rotate it with `terraform apply -replace=random_password.origin_secret` and update the Cloudflare rule from the clipboard
-- Releases deploy new code automatically (`build-lambda` without AWS access, `deploy-lambda` with OIDC); infrastructure changes go through the owner's `terraform apply`
+- Releases deploy new code automatically through `.github/workflows/deploy-lambda.yml` (build without AWS access, deploy with OIDC); run it by hand on main to redeploy. Infrastructure changes go through the owner's `terraform apply`
 
 ## Roadmap
 

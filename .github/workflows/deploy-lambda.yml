@@ -1,0 +1,69 @@
+name: Deploy Lambda
+
+# Ships the current code to the hosted endpoint, https://mcp.aldomatias.com/mcp. release.yml
+# calls it after every npm publish; run it by hand (Actions → Deploy Lambda → Run workflow, on
+# main) to redeploy the latest release.
+#
+# Two jobs on purpose: `build` runs dependency code (npm, tsc) with no AWS access, and `deploy`
+# installs and runs nothing but the AWS CLI while it holds the deploy role. That role can only
+# update this function's code; infrastructure changes go through the owner's `terraform apply`.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: deploy-lambda
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node scripts/build-lambda.mjs
+      - name: Zip the bundle
+        run: cd build/lambda && zip -qr ../lambda.zip .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lambda-zip
+          path: build/lambda.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Holds AWS_DEPLOY_ROLE_ARN and is restricted to main; the role trusts only this environment.
+    environment: release
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lambda-zip
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: mx-central-1
+      - name: Update the function code
+        run: |
+          aws lambda update-function-code --function-name dof-mcp \
+            --zip-file fileb://lambda.zip --query 'LastUpdateStatus' --output text
+          aws lambda wait function-updated-v2 --function-name dof-mcp
+      - name: Smoke test
+        run: curl -fsS https://mcp.aldomatias.com/healthz

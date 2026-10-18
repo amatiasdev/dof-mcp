@@ -119,58 +119,13 @@ jobs:
           done
           exit 1
 
-  # Builds the bundle for the public endpoint with no AWS access: dependency code (tsc, npm) runs
-  # here, never in the job that can assume the deploy role. Skipped until the `release`
-  # environment has an AWS_DEPLOY_ROLE_ARN variable.
-  build-lambda:
+  # Ships the released code to the hosted endpoint (see deploy-lambda.yml). The gate must not
+  # read AWS_DEPLOY_ROLE_ARN: it lives in the `release` environment, which a job-level `if`
+  # cannot see, so such a check is always empty and the deploy would never run.
+  deploy-lambda:
     needs: publish
-    if: needs.publish.outputs.published == 'true' && vars.AWS_DEPLOY_ROLE_ARN != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    if: needs.publish.outputs.published == 'true'
+    uses: ./.github/workflows/deploy-lambda.yml
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - run: npm ci --ignore-scripts
-      - run: npm run build
-      - run: node scripts/build-lambda.mjs
-      - name: Zip the bundle
-        run: cd build/lambda && zip -qr ../lambda.zip .
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: lambda-zip
-          path: build/lambda.zip
-          retention-days: 7
-          if-no-files-found: error
-
-  # Ships the released code to https://mcp.aldomatias.com/mcp. It checks out and installs
-  # nothing; the role it assumes can only update the code of this one function, and
-  # infrastructure changes go through the owner's `terraform apply`.
-  deploy-lambda:
-    needs: build-lambda
-    runs-on: ubuntu-latest
-    environment: release
-    timeout-minutes: 10
-    permissions:
       id-token: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: lambda-zip
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: mx-central-1
-      - name: Update the function code
-        run: |
-          aws lambda update-function-code --function-name dof-mcp \
-            --zip-file fileb://lambda.zip --query 'LastUpdateStatus' --output text
-          aws lambda wait function-updated-v2 --function-name dof-mcp
-      - name: Smoke test
-        run: curl -fsS https://mcp.aldomatias.com/healthz
