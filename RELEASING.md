@@ -8,9 +8,12 @@ npm trusted publishing (OIDC, automatic provenance, no `NPM_TOKEN`).
 1. Merge pull requests that include a changeset (`npx changeset`).
 2. The Release workflow opens or updates a **Version Packages** pull request. It bumps
    `package.json` and runs `scripts/sync-version.mjs`, which updates `src/version.ts`,
-   `server.json` and `package-lock.json`.
-3. Merge it. The workflow tests, packs and publishes to npm, creates the GitHub release and
-   publishes `server.json` to the MCP Registry.
+   `server.json` and `package-lock.json`. GitHub does not run workflows on pull requests the
+   bot opens, so the `check-version-pr` job starts CI and CodeQL on that branch by
+   `workflow_dispatch`; the PR then shows the same required checks as any other.
+3. Once the checks pass, merge it. The workflow tests, packs and publishes to npm, creates the
+   GitHub release, publishes `server.json` to the MCP Registry and deploys the hosted
+   endpoint.
 
 ## One-time setup (owner)
 

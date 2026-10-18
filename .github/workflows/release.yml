@@ -57,6 +57,24 @@ jobs:
           # Keeps src/version.ts, server.json and package-lock.json in step with package.json.
           script: npm run version-packages
 
+  # Pull requests opened with GITHUB_TOKEN trigger no workflows, so the Version Packages PR
+  # would go unchecked. workflow_dispatch is the exception GitHub allows: run CI and CodeQL on
+  # its branch so the PR gets the same required checks as any other. This job checks out and
+  # installs nothing; it can only start workflows.
+  check-version-pr:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Run CI and CodeQL on the Version Packages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
+          gh workflow run codeql.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
+
   pack:
     needs: select-mode
     if: needs.select-mode.outputs.mode == 'publish'

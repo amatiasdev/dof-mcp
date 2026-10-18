@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Started by release.yml for the Version Packages PR, which GITHUB_TOKEN cannot trigger.
+  workflow_dispatch:
 
 permissions:
   contents: read
