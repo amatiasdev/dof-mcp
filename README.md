@@ -1,7 +1,7 @@
 # dof-mcp
 
-[![CI](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml)
-[![Contract](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml/badge.svg)](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml)
+[![CI](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/amatiasdev/dof-mcp/actions/workflows/ci.yml?query=branch%3Amain)
+[![Contract](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml/badge.svg?branch=main)](https://github.com/amatiasdev/dof-mcp/actions/workflows/contract.yml?query=branch%3Amain)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/amatiasdev/dof-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/amatiasdev/dof-mcp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15638/badge)](https://www.bestpractices.dev/projects/15638)
 [![npm](https://img.shields.io/npm/v/dof-mcp)](https://www.npmjs.com/package/dof-mcp)
