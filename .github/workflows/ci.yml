@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Started by release.yml for the Version Packages PR, which GITHUB_TOKEN cannot trigger.
+  # Manual runs (Actions → Run workflow), for example on a branch without a pull request.
   workflow_dispatch:
 
 permissions:
