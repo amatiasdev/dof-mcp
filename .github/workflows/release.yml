@@ -57,23 +57,37 @@ jobs:
           # Keeps src/version.ts, server.json and package-lock.json in step with package.json.
           script: npm run version-packages
 
-  # Pull requests opened with GITHUB_TOKEN trigger no workflows, so the Version Packages PR
-  # would go unchecked. workflow_dispatch is the exception GitHub allows: run CI and CodeQL on
-  # its branch so the PR gets the same required checks as any other. This job checks out and
-  # installs nothing; it can only start workflows.
+  # GitHub holds the pull_request runs (CI, CodeQL) of the bot-authored Version Packages PR as
+  # "action_required" until someone approves them, so the PR would show no checks and need an
+  # admin bypass. This job approves those runs, and only those: event pull_request, branch
+  # changeset-release/main, the PR's current head commit, which this workflow just wrote. It
+  # checks out and installs nothing.
   check-version-pr:
     needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: write
+      pull-requests: read
     steps:
-      - name: Run CI and CodeQL on the Version Packages branch
+      - name: Approve the Version Packages PR's checks
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
-          gh workflow run codeql.yml --repo "$GITHUB_REPOSITORY" --ref changeset-release/main
+          head=$(gh pr view changeset-release/main --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+          approved=0
+          # The runs appear a few seconds after the push; wait up to ~3 minutes for CI and CodeQL.
+          for attempt in $(seq 1 18); do
+            for id in $(gh run list --repo "$GITHUB_REPOSITORY" --branch changeset-release/main \
+                --event pull_request --status action_required --commit "$head" \
+                --json databaseId --jq '.[].databaseId'); do
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/approve" && approved=$((approved + 1))
+            done
+            [ "$approved" -ge 2 ] && exit 0
+            sleep 10
+          done
+          echo "Approved $approved run(s) for $head; expected CI and CodeQL" >&2
+          exit 1
 
   pack:
     needs: select-mode

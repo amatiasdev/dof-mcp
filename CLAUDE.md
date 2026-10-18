@@ -71,7 +71,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - Hard caps: API Gateway throttling 5 rps / burst 10 and Lambda reserved concurrency 3. Budget alerts at $5 and $15 to contacto@aldomatias.com
 - Usage and failures: one JSON log line per request (no IPs or arguments), CloudWatch alarms by email, saved Logs Insights queries for distinct clients per week and tool usage
 - Never print or paste the origin secret; rotate it with `terraform apply -replace=random_password.origin_secret` and update the Cloudflare rule from the clipboard
-- The Version Packages PR gets CI and CodeQL through `check-version-pr` (workflow_dispatch), so it merges like any PR, without an admin bypass
+- The Version Packages PR gets CI and CodeQL: `check-version-pr` approves its held pull_request runs, so it merges like any PR, without an admin bypass
 - Releases deploy new code automatically through `.github/workflows/deploy-lambda.yml` (build without AWS access, deploy with OIDC); run it by hand on main to redeploy. Infrastructure changes go through the owner's `terraform apply`
 
 ## Roadmap
