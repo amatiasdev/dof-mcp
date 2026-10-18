@@ -66,6 +66,12 @@ export const rawNoteDetailResponseSchema = rawEnvelopeSchema.extend({
   Nota: rawNoteDetailSchema,
 });
 
+/** The note-detail endpoint answers an unknown id with 200 and `"Nota": []`. */
+export const rawNoteLookupResponseSchema = rawEnvelopeSchema.extend({
+  tamanioExcesivo: z.boolean().optional(),
+  Nota: z.union([rawNoteDetailSchema, z.array(z.unknown()).length(0)]),
+});
+
 /** Raw indicator as returned by the SIDOF `indicadores/...` endpoints. */
 export const rawIndicatorSchema = z.object({
   codIndicador: z.number().int(),

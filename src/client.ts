@@ -15,7 +15,7 @@ import {
   rawDailyResponseSchema,
   rawEnvelopeSchema,
   rawIndicatorsResponseSchema,
-  rawNoteDetailResponseSchema,
+  rawNoteLookupResponseSchema,
 } from "./schema.js";
 import { VERSION } from "./version.js";
 
@@ -66,6 +66,14 @@ export class DofApiError extends Error {
   ) {
     super(message);
     this.name = "DofApiError";
+  }
+}
+
+/** SIDOF has no such resource: an unknown note id, or a date with no published data. */
+export class DofNotFoundError extends DofApiError {
+  constructor(message: string) {
+    super(message, 404);
+    this.name = "DofNotFoundError";
   }
 }
 
@@ -363,8 +371,10 @@ export class DofClient {
     if (!Number.isSafeInteger(id) || id <= 0) {
       throw new RangeError(`Expected a positive integer note id, got ${id}`);
     }
-    const raw = await this.request(`/notas/nota/${id}`, rawNoteDetailResponseSchema);
-    return mapSourced(raw, normalizeNoteDetail);
+    const { data, source } = await this.request(`/notas/nota/${id}`, rawNoteLookupResponseSchema);
+    const nota = data.Nota;
+    if (Array.isArray(nota)) throw new DofNotFoundError(`Note ${id} does not exist in SIDOF`);
+    return { data: normalizeNoteDetail({ ...data, Nota: nota }), source };
   }
 
   /** Returns the indicators SIDOF lists for a day, or for today when no date is given. */
@@ -496,6 +506,9 @@ export class DofClient {
     }
     if (!res.ok) {
       await res.body?.cancel().catch(() => {});
+      if (res.status === 404) {
+        throw new DofNotFoundError(`SIDOF has no data for ${new URL(url).pathname} (HTTP 404)`);
+      }
       throw new DofApiError(`SIDOF responded ${res.status}`, res.status);
     }
     const fetchedAt = new Date().toISOString();
