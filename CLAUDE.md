@@ -69,6 +69,7 @@ CI (`.github/workflows/ci.yml`, Node 22 and 24) runs all four on every push and 
 - The owner's personal AWS account (SSO profile `personal`), region `mx-central-1`. Its ID lives only in the git-ignored `infra/*/terraform.tfvars` and `infra/app/backend.hcl`; never commit it. Never deploy to any other account: the default CLI profile on this machine points elsewhere, and Terraform pins `allowed_account_ids`
 - Cloudflare (zone aldomatias.com, free plan) proxies `mcp`, enforces Full (strict) TLS and a per-IP rate limit, and adds the `x-dof-origin-secret` header; the Lambda refuses requests without it
 - Hard caps: API Gateway throttling 5 rps / burst 10 and Lambda reserved concurrency 3. Budget alerts at $5 and $15 to contacto@aldomatias.com
+- Usage and failures: one JSON log line per request (no IPs or arguments), CloudWatch alarms by email, saved Logs Insights queries for distinct clients per week and tool usage
 - Never print or paste the origin secret; rotate it with `terraform apply -replace=random_password.origin_secret` and update the Cloudflare rule from the clipboard
 - Releases deploy new code automatically through `.github/workflows/deploy-lambda.yml` (build without AWS access, deploy with OIDC); run it by hand on main to redeploy. Infrastructure changes go through the owner's `terraform apply`
 
